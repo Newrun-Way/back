@@ -4,10 +4,16 @@ import json
 import os
 from pathlib import Path
 from .jpype_setup import init_jpype
+import logging
+import time
+
+logger = logging.getLogger(__name__)
 
 def extract_hwpx_with_structure(hwpx_path):
     """HWPX 파일에서 구조화된 데이터 추출"""
-    
+    logger.info(f"Starting HWPX extraction for {hwpx_path}")
+    start_time = time.time()
+
     result = {
         "text_content": [],
         "tables": [],
@@ -16,7 +22,7 @@ def extract_hwpx_with_structure(hwpx_path):
         "paragraphs": [],
         "file_type": "HWPX"
     }
-    
+
     # HWPX는 ZIP 파일
     with zipfile.ZipFile(hwpx_path, 'r') as z:
         
@@ -93,12 +99,16 @@ def extract_hwpx_with_structure(hwpx_path):
                 "size": z.getinfo(img_file).file_size
             })
     
+    end_time = time.time()
+    logger.info(f"Finished HWPX extraction for {hwpx_path} in {end_time - start_time:.2f} seconds")
     return result
 
 
 def extract_hwp_text(hwp_jar_path, hwp_path):
     """HWP 파일에서 텍스트 추출"""
-    
+    logger.info(f"Starting HWP extraction for {hwp_path} using JAR: {hwp_jar_path}")
+    start_time = time.time()
+
     result = {
         "text_content": [],
         "tables": [],
@@ -107,10 +117,15 @@ def extract_hwp_text(hwp_jar_path, hwp_path):
         "paragraphs": [],
         "file_type": "HWP"
     }
-    
+
     # jpype 초기화 (JAVA_HOME 자동 설정 + JVM 시작)
-    jpype = init_jpype(hwp_jar_path)
-    
+    try:
+        jpype = init_jpype(hwp_jar_path)
+        logger.info("JPype initialized successfully.")
+    except Exception as e:
+        logger.error(f"Failed to initialize JPype: {e}", exc_info=True)
+        raise
+
     try:
         # Java 패키지 가져오기
         HWPReader_class = jpype.JPackage('kr.dogfoot.hwplib.reader')
@@ -129,20 +144,27 @@ def extract_hwp_text(hwp_jar_path, hwp_path):
         # 메타데이터
         result["metadata"]["note"] = "HWP 파일은 텍스트만 추출됩니다. 표/이미지가 필요하면 HWPX로 저장하세요."
         
+    except Exception as e:
+        logger.error(f"Error during HWP text extraction: {e}", exc_info=True)
+        raise
     finally:
         pass
-    
+
+    end_time = time.time()
+    logger.info(f"Finished HWP extraction for {hwp_path} in {end_time - start_time:.2f} seconds")
     return result
 
 
 def parse_document(file_path: str):
     """HWP/HWPX 파일을 파싱하고 구조화된 JSON 데이터를 반환합니다."""
-    
+    logger.info(f"Starting document parsing for {file_path}")
+    start_time = time.time()
+
     file_ext = Path(file_path).suffix.lower()
-    
+
     if file_ext not in ['.hwp', '.hwpx']:
         raise ValueError(f"지원하지 않는 파일 형식입니다: {file_ext}. .hwp 또는 .hwpx 파일만 지원합니다.")
-    
+
     if file_ext == '.hwpx':
         # HWPX: 표, 이미지 포함 완벽 추출
         result = extract_hwpx_with_structure(file_path)
@@ -151,11 +173,13 @@ def parse_document(file_path: str):
         # JAR 파일 경로 (back/app/python-hwplib/hwplib-1.1.8.jar)
         current_dir = Path(__file__).parent
         hwp_jar_path = str(current_dir.parent / "python-hwplib" / "hwplib-1.1.8.jar")
-        
+
         if not os.path.exists(hwp_jar_path):
             raise FileNotFoundError(f"hwplib JAR 파일을 찾을 수 없습니다: {hwp_jar_path}")
-        
+
         # HWP 추출
         result = extract_hwp_text(hwp_jar_path, file_path)
-    
+
+    end_time = time.time()
+    logger.info(f"Finished document parsing for {file_path} in {end_time - start_time:.2f} seconds")
     return result
