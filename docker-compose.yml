@@ -1,8 +1,8 @@
-version: "3.8"
+version: "3.11"
 services:
-  back:
+  back1:
     build: .
-    image: newrun/back:latest
+    image: newrun/back1:latest
     env_file:
       - .env
     volumes:

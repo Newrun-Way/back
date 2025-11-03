@@ -2,3 +2,4 @@ fastapi
 uvicorn
 JPype1
 python-multipart
+pydantic_settings
