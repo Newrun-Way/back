@@ -1,11 +1,10 @@
-version: "3.11"
 services:
-  back1:
+  backend:
     build: .
-    image: newrun/back1:latest
-    env_file:
-      - .env
-    volumes:
-      - ./data:/data
+    container_name: owpml_backend
     ports:
       - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./requirements.txt:/app/requirements.txt
+    restart: unless-stopped
