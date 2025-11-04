@@ -1,10 +1,46 @@
+# docker-compose.yml
+version: "3.9"
+
+volumes:
+  hf_cache:
+  st_cache:
+
 services:
-  backend:
+  # 로컬(CPU)
+  backend-cpu:
+    profiles: ["cpu"]
     build: .
     container_name: owpml_backend
     ports:
       - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      EMBEDDING_DEVICE: ${EMBEDDING_DEVICE:-cpu}
+      HF_HOME: /opt/hf
+      SENTENCE_TRANSFORMERS_HOME: /opt/st
     volumes:
       - ./app:/app/app
-      - ./requirements.txt:/app/requirements.txt
+      - hf_cache:/opt/hf
+      - st_cache:/opt/st
+    restart: unless-stopped
+
+  # 서버(GPU)
+  backend-gpu:
+    profiles: ["gpu"]
+    build: .
+    container_name: owpml_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      EMBEDDING_DEVICE: cuda
+      HF_HOME: /opt/hf
+      SENTENCE_TRANSFORMERS_HOME: /opt/st
+    volumes:
+      - ./app:/app/app
+      - hf_cache:/opt/hf
+      - st_cache:/opt/st
+    gpus: all # ← 검증 요구사항 충족
     restart: unless-stopped
