@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.api.v1.router import router as api_router
+from app.rag.pipeline import RAGPipeline
+import os
 
 
 settings = get_settings()
@@ -11,6 +13,18 @@ setup_logging(settings.LOG_LEVEL)
 
 
 app = FastAPI(title=settings.APP_NAME, version="1.0.0")
+
+# RAG 파이프라인 인스턴스를 app의 state에 저장
+@app.on_event("startup")
+async def startup_event():
+    # 필요한 디렉토리 생성
+    os.makedirs(settings.VECTOR_STORE_DIR, exist_ok=True)
+    os.makedirs(settings.EXTRACTED_DIR, exist_ok=True)
+
+    pipeline = RAGPipeline(settings=settings)
+    app.state.rag_pipeline = pipeline
+    print(f"RAG Pipeline initialized. Vector store at: {settings.VECTOR_STORE_DIR}")
+
 
 app.add_middleware(
     CORSMiddleware,
