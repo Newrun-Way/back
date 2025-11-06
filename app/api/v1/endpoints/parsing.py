@@ -1,40 +1,39 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
 from pathlib import Path
-import shutil
-import os
-from app.core.parser import parse_document # Will create this file
+import shutil, os
+from app.core.parser import parse_document
 
 router = APIRouter()
 
 @router.post("/upload-and-parse/")
-async def upload_and_parse_hwp(file: UploadFile = File(...)):
+async def upload_and_parse_hwp(
+    file: UploadFile = File(...),
+    dept_id: str = Form(None),
+    project_id: str = Form(None),
+    user_id: str = Form(None)
+):
     if not file.filename.endswith((".hwp", ".hwpx")):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only .hwp and .hwpx files are allowed"
-        )
+        raise HTTPException(status_code=400, detail="Only .hwp/.hwpx allowed")
 
-    # Create a temporary directory to save the uploaded file
+    # Create a temp directory to save the uploaded file
     temp_dir = Path("temp_uploads")
     temp_dir.mkdir(exist_ok=True)
-    
     file_path = temp_dir / file.filename
+
     try:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        # Call the parsing function
-        parsed_data = parse_document(str(file_path))
+        meta = {k: v for k, v in {"dept_id": dept_id, "project_id": project_id, "user_id": user_id}.items() if v}
+        parsed_data = parse_document(str(file_path), doc_id=file.filename, meta=meta)
         
         return {"filename": file.filename, "parsed_data": parsed_data}
+    
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing file: {e}"
-        )
+               raise HTTPException(status_code=500, detail=f"Error processing file: {e}")
+
     finally:
-        # Clean up the temporary file and directory
         if file_path.exists():
             os.remove(file_path)
-        if temp_dir.exists() and not os.listdir(temp_dir): # Only remove if empty
-            os.rmdir(temp_dir)
+        if not any(temp_dir.iterdir()):
+            temp_dir.rmdir()

@@ -120,6 +120,7 @@ def extract_hwp_text(hwp_jar_path, hwp_path):
 
     # jpype 초기화 (JAVA_HOME 자동 설정 + JVM 시작)
     try:
+        print('인잇 시작')
         jpype = init_jpype(hwp_jar_path)
         logger.info("JPype initialized successfully.")
     except Exception as e:
@@ -155,7 +156,7 @@ def extract_hwp_text(hwp_jar_path, hwp_path):
     return result
 
 
-def parse_document(file_path: str):
+def parse_document(file_path: str, *, doc_id: str | None = None, meta: dict | None = None):
     """HWP/HWPX 파일을 파싱하고 구조화된 JSON 데이터를 반환합니다."""
     logger.info(f"Starting document parsing for {file_path}")
     start_time = time.time()
@@ -179,7 +180,10 @@ def parse_document(file_path: str):
 
         # HWP 추출
         result = extract_hwp_text(hwp_jar_path, file_path)
-
+    
+    result["doc_id"] = doc_id or Path(file_path).stem
+    result["meta"] = meta or {}
+    
     end_time = time.time()
     logger.info(f"Finished document parsing for {file_path} in {end_time - start_time:.2f} seconds")
     return result
