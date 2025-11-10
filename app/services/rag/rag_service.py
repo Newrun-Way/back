@@ -124,57 +124,28 @@ class RAGService:
     # Indexing (단일/샤드)
     # ---------------------------------------------------------------------
     def index_parsed_paragraphs(self, parsed: Dict, *, persist: bool = True) -> Dict:
-        """
-        parser 결과(JSON)를 받아 인덱싱
-        parsed: {"paragraphs":[{"text":...}, ...], "metadata": {...}}
-        - SHARDING_ENABLED=False → 단일 인덱스에 적재
-        - True → index_parsed_paragraphs_sharded 사용
-        """
-        if self.sharding_enabled:
-            return self.index_parsed_paragraphs_sharded(parsed, persist=persist)
-
-        paras = parsed.get("paragraphs", [])
         meta = parsed.get("metadata", {}) or {}
-        if not paras:
-            return {"indexed": 0}
-
         docs = []
-        for i, p in enumerate(paras):
-            text = (p.get("text") or "").strip()
-            if not text:
+        for i, text in enumerate(_iter_paragraph_texts(parsed)):
+            m = dict(meta); m["paragraph_idx"] = i
+            if not text.strip():
                 continue
-            # 근거 좌표 부여(선택)
-            m = dict(meta)
-            m["paragraph_idx"] = i
             docs.extend(self.chunker.chunk_text(text, metadata=m))
-
         if not docs:
             return {"indexed": 0}
-
         embs = self.embedder.embed_texts([d.page_content for d in docs]).astype(np.float32)
         self.vector_store.add_documents(docs, embs)
-        if persist:
-            self._save_store(self.vector_store, self.vector_dir)
+        if persist: self._save_store(self.vector_store, self.vector_dir)
         return {"indexed": len(docs)}
-
+    
     def index_parsed_paragraphs_sharded(self, parsed: Dict, *, persist: bool = True) -> Dict:
-        """
-        샤드 규칙에 따라 여러 인덱스에 중복 인덱싱
-        """
-        paras = parsed.get("paragraphs", [])
         meta = parsed.get("metadata", {}) or {}
-        if not paras:
-            return {"indexed": 0, "shards": []}
-
         docs = []
-        for i, p in enumerate(paras):
-            text = (p.get("text") or "").strip()
-            if not text:
+        for i, text in enumerate(_iter_paragraph_texts(parsed)):
+            m = dict(meta); m["paragraph_idx"] = i
+            if not text.strip():
                 continue
-            m = dict(meta)
-            m["paragraph_idx"] = i
             docs.extend(self.chunker.chunk_text(text, metadata=m))
-
         if not docs:
             return {"indexed": 0, "shards": []}
 
@@ -185,10 +156,8 @@ class RAGService:
             store = self._open_shard(key)
             store.add_documents(docs, embs)
             total += len(docs)
-            if persist:
-                self._save_shard(key)
+            if persist: self._save_shard(key)
         return {"indexed": total, "shards": shard_keys}
-
     # ---------------------------------------------------------------------
     # Query (단일/샤드)
     # ---------------------------------------------------------------------
@@ -276,3 +245,49 @@ class RAGService:
             out.append((shard, doc, -neg))
         out.reverse()
         return out
+    
+
+    # --- 새 유틸: 문단 보정기 -----------------------------------------------
+import re
+
+def _iter_paragraph_texts(parsed: dict):
+    """
+    paragraphs가 비면 text_content / text를 사용해 문단을 생성한다.
+    - \n\n(빈 줄) 기준 1차 분해, 그래도 없으면 \n 기준 분해
+    - 공백/번호(\n1, \n2 ...)는 그대로 텍스트로 취급 (청킹이 처리)
+    """
+    # 1) 이미 paragraphs가 있으면 그대로 사용
+    paras = parsed.get("paragraphs") or []
+    if paras:
+        for p in paras:
+            t = (p.get("text") or "").strip()
+            if t:
+                yield t
+        return
+
+    # 2) 없으면 text_content / text 에서 생성
+    texts = []
+    tc = parsed.get("text_content")
+    if isinstance(tc, list):
+        texts.extend([t for t in tc if isinstance(t, str)])
+    elif isinstance(tc, str):
+        texts.append(tc)
+
+    raw = "\n".join(texts).strip()
+    if not raw:
+        return
+
+    # 빈 줄 2개 이상 기준으로 1차 분해 → 그래도 부족하면 단일 개행으로 보조
+    blocks = re.split(r"\n{2,}", raw)
+    for b in blocks:
+        b = b.strip()
+        if not b:
+            continue
+        # 너무 길게 붙은 경우 줄 개행으로 한 번 더 쪼개기(선택)
+        if "\n" in b and len(b) > 2_000:
+            for seg in re.split(r"\n+", b):
+                seg = seg.strip()
+                if seg:
+                    yield seg
+        else:
+            yield b
