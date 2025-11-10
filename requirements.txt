@@ -2,11 +2,11 @@ fastapi
 uvicorn
 JPype1
 python-multipart
-pydantic_settings
+pydantic-settings
 langchain-text-splitters
 langchain-core
 loguru
 numpy
 sentence-transformers
-openai
+openai>=1.0.0
 faiss-cpu

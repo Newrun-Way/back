@@ -1,6 +1,4 @@
 # docker-compose.yml
-version: "3.9"
-
 volumes:
   hf_cache:
   st_cache:
@@ -8,7 +6,7 @@ volumes:
 services:
   # 로컬(CPU)
   backend-cpu:
-    profiles: ["cpu"]
+#    profiles: ["cpu"]
     build: .
     container_name: owpml_backend
     ports:
