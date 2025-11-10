@@ -182,7 +182,10 @@ def parse_document(file_path: str, *, doc_id: str | None = None, meta: dict | No
         result = extract_hwp_text(hwp_jar_path, file_path)
     
     result["doc_id"] = doc_id or Path(file_path).stem
-    result["meta"] = meta or {}
+    merged_meta = result.get("metadata", {})
+    if meta:
+        merged_meta.update(meta)
+    result["metadata"] = merged_meta
     
     end_time = time.time()
     logger.info(f"Finished document parsing for {file_path} in {end_time - start_time:.2f} seconds")
