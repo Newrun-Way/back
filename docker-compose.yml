@@ -6,7 +6,7 @@ volumes:
 services:
   # 로컬(CPU)
   backend-cpu:
-#    profiles: ["cpu"]
+    #    profiles: ["cpu"]
     build: .
     container_name: owpml_backend
     ports:
@@ -19,6 +19,7 @@ services:
       SENTENCE_TRANSFORMERS_HOME: /opt/st
     volumes:
       - ./app:/app/app
+      - ./data/uploads:/app/data/uploads
       - hf_cache:/opt/hf
       - st_cache:/opt/st
     restart: unless-stopped

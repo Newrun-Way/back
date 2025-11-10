@@ -13,7 +13,12 @@ class Settings(BaseSettings):
     # RAG 설정
     DATA_DIR: str = "data"
     VECTOR_STORE_DIR: str = "data/vector_store"
-    UPLOADS_DIR: str = "data/uploads"
+    # 인덱스 타입: "flat" | "ivf" | "hnsw" (VectorStore 구현이 지원하는 값)
+    VECTOR_STORE_INDEX_TYPE: str = "flat"
+    # 샤딩 사용 여부 (False면 단일 인덱스)
+    SHARDING_ENABLED: bool = False
+    
+    UPLOAD_DIR: str = "data/uploads"
     EXTRACTED_DIR: str = "extracted_results"
 
     OPENAI_API_KEY: str = ""
