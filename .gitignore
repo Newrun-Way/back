@@ -1,3 +1,4 @@
 check_java.py
 __pycache__/
 temp_uploads/
+.env
