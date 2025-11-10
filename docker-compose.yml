@@ -19,6 +19,7 @@ services:
       SENTENCE_TRANSFORMERS_HOME: /opt/st
     volumes:
       - ./app:/app/app
+      - ./data/vector_store:/app/data/vector_store
       - ./data/uploads:/app/data/uploads
       - hf_cache:/opt/hf
       - st_cache:/opt/st
