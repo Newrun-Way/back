@@ -5,7 +5,7 @@ RAG 시스템 패키지
 from .chunker import DocumentChunker
 from .embedder import DocumentEmbedder
 from .vector_store import VectorStore
-from .llm_service import LLMGenerator
+from app.services.llm.llm_service import LLMGenerator
 from .pipeline import RAGPipeline
 
 __all__ = [

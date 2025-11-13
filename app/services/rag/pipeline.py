@@ -1,6 +1,6 @@
 # app/services/rag/pipeline.py
 from app.services.rag.rag_service import RAGService
-from app.services.rag.llm_service import LLMGenerator
+from app.services.llm.llm_service import LLMGenerator
 from app.core.config import get_settings
 import os
 from typing import Optional
