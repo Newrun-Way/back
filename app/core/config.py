@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str = ""
 
+    EMBEDDING_DEVICE: str = "cuda"
     EMBEDDING_MODEL: str = "BAAI/bge-m3"
     EMBEDDING_DIM: int = 1024
     MAX_SEQ_LENGTH: int = 8192
