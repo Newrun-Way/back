@@ -63,29 +63,29 @@ class RAGService:
         self._lock = threading.Lock()
         self._shards: dict[str, VectorStore] = {}  # shard_key -> store
 
-        # ---------------------------------------------------------------------
-        # 내부 유틸: VectorStore open/save
-        # ---------------------------------------------------------------------
-        def _open_or_create_store(self, dirpath: Path) -> VectorStore:
-            """ChromaDB에 맞게 수정된 버전"""
-            dirpath.mkdir(parents=True, exist_ok=True)
+    # ---------------------------------------------------------------------
+    # 내부 유틸: VectorStore open/save
+    # ---------------------------------------------------------------------
+    def _open_or_create_store(self, dirpath: Path) -> VectorStore:
+        """ChromaDB에 맞게 수정된 버전"""
+        dirpath.mkdir(parents=True, exist_ok=True)
 
-            try:
-                # 1. 로드 시도 (ChromaDB는 load_dir만 필요)
-                logger.info(f"VectorStore 로드 시도: {dirpath}")
-                return VectorStore.load(load_dir=dirpath)
+        try:
+            # 1. 로드 시도 (ChromaDB는 load_dir만 필요)
+            logger.info(f"VectorStore 로드 시도: {dirpath}")
+            return VectorStore.load(load_dir=dirpath)
 
-            except Exception as e:
-                # 2. 로드 실패 시 (새로 생성)
-                logger.warning(f"VectorStore 로드 실패({e}). 새 ChromaDB 저장소를 생성합니다: {dirpath}")
+        except Exception as e:
+            # 2. 로드 실패 시 (새로 생성)
+            logger.warning(f"VectorStore 로드 실패({e}). 새 ChromaDB 저장소를 생성합니다: {dirpath}")
 
-                # ✅ ChromaDB 생성자 호출 (persist_dir 사용)
-                return VectorStore(
-                    persist_dir=dirpath,
-                    # 아래 인자들은 호환용 VectorStore에서 경고 로그만 남기고 무시되므로 유지해도 괜찮습니다.
-                    embedding_dim=self.embedder.embedding_dim,
-                    index_type=self.index_type
-                )
+            # ✅ ChromaDB 생성자 호출 (persist_dir 사용)
+            return VectorStore(
+                persist_dir=dirpath,
+                # 아래 인자들은 호환용 VectorStore에서 경고 로그만 남기고 무시되므로 유지해도 괜찮습니다.
+                embedding_dim=self.embedder.embedding_dim,
+                index_type=self.index_type
+            )
 
     # ---------------------------------------------------------------------
     # 샤드 키 규칙/레지스트리
