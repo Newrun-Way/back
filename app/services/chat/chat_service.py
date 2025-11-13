@@ -15,7 +15,7 @@ class ChatService:
         settings = get_settings()
 
         self.embedder = DocumentEmbedder(
-            model=settings.EMBEDDING_MODEL,
+            model_name=settings.EMBEDDING_MODEL,
             device=settings.EMBEDDING_DEVICE,
         )
 
