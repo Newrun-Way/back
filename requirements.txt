@@ -6,7 +6,7 @@ pydantic-settings
 langchain-text-splitters
 langchain-core
 loguru
-numpy
+numpy<2.0
 sentence-transformers
 openai>=1.0.0
 faiss-cpu
