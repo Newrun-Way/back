@@ -31,4 +31,5 @@ class RAGPipeline:
 
     def query(self, question: str, top_k: int = 3):
         contexts = self.retriever.query(question, top_k=top_k)
+        print(f"검색된 컨텍스트 : {contexts}")
         return self.llm.generate_with_sources(contexts, question)

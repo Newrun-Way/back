@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # 인덱스 타입: "flat" | "ivf" | "hnsw" (VectorStore 구현이 지원하는 값)
     VECTOR_STORE_INDEX_TYPE: str = "flat"
     # 샤딩 사용 여부 (False면 단일 인덱스)
-    SHARDING_ENABLED: bool = False
+    SHARDING_ENABLED: bool = True
     
     UPLOAD_DIR: str = "app/data/uploads"
     EXTRACTED_DIR: str = "extracted_results"
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
 답변 형식:
 1. 핵심 답변 (1-2문장)
 2. 근거 (문서 인용)
-3. 출처 (문서명)
+3. 출처 (문서 이름)
 
 규칙:
 - 존댓말 사용

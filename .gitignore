@@ -1,4 +1,7 @@
 check_java.py
+app/core/__pycache__/
+app/data/vector_store/
+app/data/uploads/
 __pycache__/
 temp_uploads/
 .env

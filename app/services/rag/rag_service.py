@@ -46,14 +46,17 @@ class RAGService:
 
         # 공통 설정
         self.vector_dir = Path(getattr(self.settings, "VECTOR_STORE_DIR", "data/vector_store"))
+        print(f"RAG서비스 vector_dir: {self.vector_dir}")
         self.index_type = getattr(self.settings, "VECTOR_STORE_INDEX_TYPE", "flat")
         self.sharding_enabled = bool(getattr(self.settings, "SHARDING_ENABLED", False))
 
         # 단일 모드용 인덱스
         if not self.sharding_enabled:
             if vector_store is not None:
+                print("단일 모드용 VectorStore 주입됨")
                 self.vector_store = vector_store
             else:
+                print("단일 모드용 VectorStore 생성/로드")
                 self.vector_store = self._open_or_create_store(self.vector_dir)
 
         # 샤드 레지스트리 (필요 시)
@@ -95,11 +98,11 @@ class RAGService:
 
     @staticmethod
     def _shard_keys_for_query(user_id: Optional[str], depts: List[str], projects: List[str]) -> List[str]:
-        keys: List[str] = []
+        keys: List[str] = ["global"]  # <-- 항상 'global'을 기본으로 포함
         if user_id: keys.append(f"user={user_id}")
         for p in projects or []: keys.append(f"proj={p}")
         for d in depts or []:    keys.append(f"dept={d}")
-        if not keys: keys.append("global")
+        
         seen=set(); out=[]
         for k in keys:
             if k not in seen: seen.add(k); out.append(k)
@@ -180,6 +183,7 @@ class RAGService:
         k = top_k or getattr(self.settings, "TOP_K", 5)
         threshold = getattr(self.settings, "SIMILARITY_THRESHOLD", 0.7)
         q_vec = self.embedder.embed_query(question).astype(np.float32)
+        print(f"질의 임베딩 차원: {q_vec.shape}",threshold)
         results: List[Tuple[object, float]] = self.vector_store.search(q_vec, top_k=k, threshold=threshold)
 
         hits: List[Dict] = []
@@ -207,6 +211,12 @@ class RAGService:
 
         q = self.embedder.embed_query(question).astype(np.float32)
         shard_keys = self._shard_keys_for_query(user_id=user_id, depts=depts, projects=projects)
+
+        # *** 👇 디버깅 로그 추가 ***
+        print(f"========= RAGService 디버깅 ==========")
+        print(f"질문: {question}")
+        print(f"검색할 샤드 목록: {shard_keys}")
+        # **********************************
 
         results_by_shard: Dict[str, List[Tuple[object, float]]] = {}
         for key in shard_keys:
