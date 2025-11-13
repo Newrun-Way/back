@@ -10,3 +10,4 @@ numpy
 sentence-transformers
 openai>=1.0.0
 faiss-cpu
+chromadb==0.4.24
