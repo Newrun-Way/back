@@ -5,48 +5,66 @@ from openai import OpenAI
 from app.core.config import get_settings
 
 
-# -----------------------------------------------------
-# 1) LLM 호출기 (API Client)
-# -----------------------------------------------------
 class LLMService:
     """
     GPT API 호출 전담 계층.
-    프롬프트 구성 역할은 하지 않는다.
+    - OpenAI 클라이언트 초기화
+    - 기본 모델/temperature/max_tokens 설정
     """
 
-    def __init__(self, model: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ):
         settings = get_settings()
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        self.model = model or settings.DEFAULT_LLM_MODEL
 
-    def generate(self, system_prompt: str, user_prompt: str, temperature: float = 0.2):
+        self.api_key = api_key or settings.OPENAI_API_KEY
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다.")
+
+        self.model = model or getattr(settings, "DEFAULT_LLM_MODEL", "gpt-4o-mini")
+        self.temperature = (
+            temperature if temperature is not None
+            else getattr(settings, "LLM_TEMPERATURE", 0.2)
+        )
+        self.max_tokens = (
+            max_tokens if max_tokens is not None
+            else getattr(settings, "LLM_MAX_TOKENS", 1024)
+        )
+
+        self.client = OpenAI(api_key=self.api_key)
+
+    def generate(self, system_prompt: str, user_prompt: str) -> str:
         """
-        기본 ChatCompletion 호출기
+        system + user 프롬프트를 받아 답변 텍스트만 리턴
         """
         res = self.client.chat.completions.create(
             model=self.model,
-            temperature=temperature,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
         )
-        return res.choices[0].message["content"]
+        return res.choices[0].message.content
 
-    def simple(self, prompt: str):
+    def simple(self, prompt: str) -> str:
         """
-        시스템 프롬프트 없이 단일 입력만
+        시스템 프롬프트 없이 단일 user 메시지만 보낼 때
         """
         res = self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
         )
-        return res.choices[0].message["content"]
+        return res.choices[0].message.content
 
 
-# -----------------------------------------------------
-# 2) LLMGenerator (프롬프트 템플릿 + 호출기 Wrapper)
-# -----------------------------------------------------
 class LLMGenerator:
     """
     - RAG용 프롬프트 템플릿
@@ -54,18 +72,31 @@ class LLMGenerator:
     - 단순 호출 Wrapper
     """
 
-    def __init__(self, model: Optional[str] = None):
-        self.llm = LLMService(model=model)
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ):
+        # 기존 코드가 넘기던 인자(api_key, model, temperature, max_tokens)를 그대로 받아서
+        # 내부 LLMService에 그대로 전달
+        self.llm = LLMService(
+            api_key=api_key,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
     # -----------------------------
-    # 문서 RAG 템플릿
+    # 1) 문서 RAG 템플릿
     # -----------------------------
     def generate_rag_answer(
         self,
         query: str,
         context_chunks: List[str],
         system_prompt: Optional[str] = None,
-    ):
+    ) -> str:
         system_prompt = system_prompt or "문서 기반 RAG Assistant입니다."
 
         context = "\n\n".join(context_chunks)
@@ -82,7 +113,7 @@ class LLMGenerator:
         return self.llm.generate(system_prompt=system_prompt, user_prompt=user_prompt)
 
     # -----------------------------
-    # 대화 기반 RAG 템플릿
+    # 2) 대화 기반 RAG 템플릿
     # -----------------------------
     def generate_chat_answer(
         self,
@@ -91,7 +122,7 @@ class LLMGenerator:
         rag_context: str,
         message: str,
         system_prompt: Optional[str] = None,
-    ):
+    ) -> str:
         system_prompt = system_prompt or "기업 문서 기반 지능형 대화 Assistant입니다."
 
         user_prompt = f"""
@@ -112,7 +143,7 @@ class LLMGenerator:
         return self.llm.generate(system_prompt=system_prompt, user_prompt=user_prompt)
 
     # -----------------------------
-    # 단순 호출
+    # 3) 단순 호출
     # -----------------------------
-    def simple(self, prompt: str):
+    def simple(self, prompt: str) -> str:
         return self.llm.simple(prompt)
