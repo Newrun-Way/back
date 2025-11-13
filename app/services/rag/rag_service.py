@@ -87,6 +87,13 @@ class RAGService:
                 index_type=self.index_type
             )
 
+    def _save_store(self, store: VectorStore, dirpath: Path):
+        """
+        벡터 저장소를 저장합니다.
+        (ChromaDB의 경우 store.save()는 경고만 출력하고 무시됩니다)
+        """
+        dirpath.mkdir(parents=True, exist_ok=True)
+        store.save(dirpath)
     # ---------------------------------------------------------------------
     # 샤드 키 규칙/레지스트리
     # ---------------------------------------------------------------------
