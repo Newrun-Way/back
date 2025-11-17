@@ -36,7 +36,7 @@ class ChatService:
         recent = self.mem.get_recent(conversation_id)
 
         # 3) 문서 RAG
-        rag_result = self.rag.query(message, return_context_only=True)
+        rag_result = self.rag.query(message)
         docs = [doc["content"] for doc in rag_result]
 
         # 4) prompt 생성
