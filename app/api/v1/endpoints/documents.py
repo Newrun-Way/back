@@ -52,7 +52,7 @@ def get_document_detail(user_id: str, doc_id: str):
 
     # 3) documents 컬렉션 로드
     try:
-        col = client.get_collection("default")
+        col = client.get_collection("documents")
     except:
         raise HTTPException(404, "documents collection not found")
 
