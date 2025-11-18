@@ -69,3 +69,31 @@ def dump_all_chroma():
         shards[shard_key] = shard_info
 
     return {"shards": shards}
+@router.get("/debug-scan/{shard}")
+def debug_scan(shard: str):
+    """
+    특정 샤드 내부의 컬렉션 메타데이터 10개를 확인하는 디버그용 API
+    실제 저장된 user_id, external_doc_id, paragraph_idx를 확인하는 목적
+    """
+    base = Path(settings.VECTOR_STORE_DIR)
+    shard_path = base / shard
+
+    if not shard_path.exists():
+        return {"error": f"Shard not found: {shard_path}"}
+
+    import chromadb
+    client = chromadb.PersistentClient(path=str(shard_path))
+
+    # 컬렉션 이름 자동 탐색
+    collections = client.list_collections()
+    info = {}
+
+    for col in collections:
+        c = client.get_collection(col.name)
+        data = c.get(include=["metadatas"], limit=20)
+        info[col.name] = data["metadatas"]
+
+    return {
+        "shard": shard,
+        "collections": info
+    }
