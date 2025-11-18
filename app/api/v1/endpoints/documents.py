@@ -116,3 +116,32 @@ def get_document_detail(user_id: str, doc_id: str):
             for text, meta in items
         ]
     }
+
+@router.get("/download/{user_id}/{doc_id}", summary="문서 다운로드")
+def download_document(user_id: str, doc_id: str):
+
+    # 업로드 기본 경로
+    base = Path(settings.UPLOAD_DIR)
+
+    # 실제 문서가 저장된 위치
+    doc_dir = base / user_id / doc_id
+
+    if not doc_dir.exists() or not doc_dir.is_dir():
+        raise HTTPException(404, f"Document folder not found: {doc_dir}")
+
+    # 내부 파일명은 언제나 original.* 형태
+    files = list(doc_dir.glob("original.*"))
+    if not files:
+        raise HTTPException(404, f"No original file found in folder: {doc_dir}")
+
+    file_path = files[0]
+
+    # 다운로드 파일명은 실제 doc_id로 반환되게 설정
+    # 예: 뉴런웨이_과제테스트.hwpx
+    download_name = f"{doc_id}{file_path.suffix}"
+
+    return FileResponse(
+        path=str(file_path),
+        filename=download_name,
+        media_type="application/octet-stream"
+    )
