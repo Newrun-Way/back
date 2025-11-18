@@ -59,8 +59,10 @@ def get_document_detail(user_id: str, doc_id: str):
     # 4) 실제 필터 조건: user_id + external_doc_id 매칭
     result = col.get(
         where={
-            "user_id": int(user_id) if user_id.isdigit() else user_id,
-            "external_doc_id": doc_id
+            "$and": [
+                {"user_id": int(user_id) if user_id.isdigit() else user_id},
+                {"external_doc_id": doc_id}
+        ]
         },
         include=["documents", "metadatas"]
     )
