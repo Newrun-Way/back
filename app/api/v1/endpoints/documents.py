@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 from pathlib import Path
 from app.core.config import get_settings
+import chromadb
 import json
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -39,16 +40,37 @@ def list_documents():
 
     return docs
 
-@router.get("/{doc_id}")
-def get_document(doc_id: str):
-    base = Path(settings.UPLOAD_DIR)
+@router.get("/{user_id}/{doc_id}/content")
+def get_document_content(user_id: str, doc_id: str):
+    # 1) 해당 user의 shard 경로
+    shard_dir = f"app/data/vector_store/{user_id}"
 
-    for user_dir in base.iterdir():
-        if not user_dir.is_dir():
-            continue
-        for doc_dir in user_dir.iterdir():
-            if doc_dir.name == doc_id:
-                meta_path = doc_dir / "metadata.json"
-                if meta_path.exists():
-                    return json.loads(meta_path.read_text(encoding="utf-8"))
-    return {"error": "Not found"}
+    # 2) Chroma 연결
+    client = chromadb.PersistentClient(path=shard_dir)
+    col = client.get_collection("documents")  # 실제 컬렉션명 맞춰야 함
+
+    # 3) doc_id로 chunk 전부 가져오기
+    result = col.get(where={"doc_id": doc_id})
+
+    docs = result["documents"]
+    metas = result["metadatas"]
+
+    # 4) chunk_index 기준으로 정렬 후 하나의 문서로 합치기
+    items = list(zip(docs, metas))
+    items.sort(key=lambda x: x[1].get("chunk_index", 0))
+
+    merged_text = "\n".join([doc for doc, _ in items])
+
+    return {
+        "user_id": user_id,
+        "doc_id": doc_id,
+        "chunk_count": len(items),
+        "content": merged_text,
+        "chunks": [
+            {
+                "index": meta.get("chunk_index"),
+                "content": doc
+            }
+            for doc, meta in items
+        ]
+    }
