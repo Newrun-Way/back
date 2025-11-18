@@ -40,9 +40,10 @@ def list_documents():
 
     return docs
 
+
 @router.get("/{user_id}/{doc_id}")
 def get_document_detail(user_id: str, doc_id: str):
-    # 1) 샤드 디렉토리 위치
+    # 1) 샤드 디렉토리 위치 (폴더명은 'user=1' 그대로 사용)
     shard_path = Path(settings.VECTOR_STORE_DIR) / user_id
     if not shard_path.exists():
         raise HTTPException(404, f"Shard {user_id} not found")
@@ -56,13 +57,28 @@ def get_document_detail(user_id: str, doc_id: str):
     except:
         raise HTTPException(404, "documents collection not found")
 
+    # ==========================================
+    # [수정됨] user_id 파싱 로직 개선
+    # URL이 "user=1"로 들어오면 -> 숫자 1로 변환하여 검색
+    # ==========================================
+    search_user_id = user_id
+    if isinstance(user_id, str) and user_id.startswith("user="):
+        try:
+            # "user=" 뒷부분을 잘라내고 숫자로 변환
+            search_user_id = int(user_id.split("=")[1])
+        except (IndexError, ValueError):
+            # 변환 실패 시 원래 값 사용
+            pass
+    elif user_id.isdigit():
+        search_user_id = int(user_id)
+
     # 4) 실제 필터 조건: user_id + external_doc_id 매칭
     result = col.get(
         where={
             "$and": [
-                {"user_id": int(user_id) if user_id.isdigit() else user_id},
+                {"user_id": search_user_id},  # 수정된 search_user_id 사용
                 {"external_doc_id": doc_id}
-        ]
+            ]
         },
         include=["documents", "metadatas"]
     )
@@ -80,6 +96,7 @@ def get_document_detail(user_id: str, doc_id: str):
 
     # 5) chunk 순서 정렬
     items = list(zip(docs, metas))
+    # paragraph_idx가 없을 경우를 대비해 안전하게 0 처리
     items.sort(key=lambda x: x[1].get("paragraph_idx", 0))
 
     # 6) 문서 merge
