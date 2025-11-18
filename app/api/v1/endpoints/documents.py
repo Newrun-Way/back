@@ -123,10 +123,16 @@ def download_document(user_id: str, doc_id: str):
     # 업로드 기본 경로
     base = Path(settings.UPLOAD_DIR)
 
-    # 실제 문서가 저장된 위치
-    doc_dir = base / user_id / doc_id
+    # [수정] user_id가 "user=1" 형태라면, 실제 폴더명인 "1"만 추출합니다.
+    target_user_folder = user_id
+    if user_id.startswith("user="):
+        target_user_folder = user_id.split("=")[1]
+
+    # 실제 문서가 저장된 위치 (user=1 대신 1을 사용)
+    doc_dir = base / target_user_folder / doc_id
 
     if not doc_dir.exists() or not doc_dir.is_dir():
+        # 디버깅을 위해 어떤 경로를 찾으려 했는지 에러 메시지에 포함
         raise HTTPException(404, f"Document folder not found: {doc_dir}")
 
     # 내부 파일명은 언제나 original.* 형태
