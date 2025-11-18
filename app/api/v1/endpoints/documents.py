@@ -142,10 +142,14 @@ def download_document(user_id: str, doc_id: str):
         raise HTTPException(404, f"No original file found in folder: {doc_dir}")
 
     file_path = files[0]
+    file_ext = file_path.suffix  # 실제 파일의 확장자 (.hwp 또는 .hwpx)
 
-    # 다운로드 파일명은 실제 doc_id로 반환되게 설정
-    # 예: 뉴런웨이_과제테스트.hwpx
-    download_name = f"{doc_id}{file_path.suffix}"
+    # [수정] doc_id가 이미 실제 확장자로 끝나는지 검사 (대소문자 무시)
+    if doc_id.lower().endswith(file_ext.lower()):
+        download_name = doc_id
+    else:
+        # 확장자가 없거나, 다른 경우에만 붙여줌
+        download_name = f"{doc_id}{file_ext}"
 
     return FileResponse(
         path=str(file_path),
