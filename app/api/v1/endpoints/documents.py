@@ -1,6 +1,6 @@
 # app/api/v1/endpoints/documents.py
 
-from fastapi import APIRouter
+from fastapi import APIRouter,HTTPException
 from pathlib import Path
 from app.core.config import get_settings
 import chromadb
@@ -52,7 +52,7 @@ def get_document_detail(user_id: str, doc_id: str):
 
     # 3) documents 컬렉션 로드
     try:
-        col = client.get_collection("documents")
+        col = client.get_collection("default")
     except:
         raise HTTPException(404, "documents collection not found")
 
