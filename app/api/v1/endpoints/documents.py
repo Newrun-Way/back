@@ -40,48 +40,60 @@ def list_documents():
 
     return docs
 
-@router.get("/{user_id}/{doc_id}", summary="문서 상세조회 (문단 전체)", tags=["documents"])
-async def get_document_detail(user_id: str, doc_id: str):
-    vector = RAGVectorStore()  # settings 기반으로 자동 샤드 로드
+@router.get("/{user_id}/{doc_id}")
+def get_document_detail(user_id: str, doc_id: str):
+    # 1) 샤드 디렉토리 위치
+    shard_path = Path(settings.VECTOR_STORE_DIR) / user_id
+    if not shard_path.exists():
+        raise HTTPException(404, f"Shard {user_id} not found")
 
-    collection = vector.get_collection("documents")
-    if collection is None:
+    # 2) 크로마 클라이언트 로드
+    client = chromadb.PersistentClient(path=str(shard_path))
+
+    # 3) documents 컬렉션 로드
+    try:
+        col = client.get_collection("documents")
+    except:
         raise HTTPException(404, "documents collection not found")
 
-    # doc_id는 metadata.external_doc_id에 저장해둠
-    results = collection.get(
+    # 4) 실제 필터 조건: user_id + external_doc_id 매칭
+    result = col.get(
         where={
-            "user_id": int(user_id),
+            "user_id": int(user_id) if user_id.isdigit() else user_id,
             "external_doc_id": doc_id
         },
-        include=["documents", "embeddings", "metadatas"]
+        include=["documents", "metadatas"]
     )
 
-    if not results or len(results.get("documents", [])) == 0:
+    docs = result.get("documents", [])
+    metas = result.get("metadatas", [])
+
+    if len(docs) == 0:
         return {
             "user_id": user_id,
             "doc_id": doc_id,
-            "total_chunks": 0,
-            "chunks": []
+            "chunks": [],
+            "total_chunks": 0
         }
 
-    chunks = []
-    docs = results["documents"]
-    metas = results["metadatas"]
+    # 5) chunk 순서 정렬
+    items = list(zip(docs, metas))
+    items.sort(key=lambda x: x[1].get("paragraph_idx", 0))
 
-    for i in range(len(docs)):
-        chunks.append({
-            "chunk_id": metas[i].get("paragraph_idx", i),
-            "content": docs[i],
-            "metadata": metas[i]
-        })
-
-    # paragraph_idx 기준 정렬
-    chunks.sort(key=lambda x: x["chunk_id"])
+    # 6) 문서 merge
+    merged = "\n".join([t[0] for t in items])
 
     return {
         "user_id": user_id,
         "doc_id": doc_id,
-        "total_chunks": len(chunks),
-        "chunks": chunks
+        "total_chunks": len(items),
+        "content": merged,
+        "chunks": [
+            {
+                "paragraph_idx": meta.get("paragraph_idx"),
+                "content": text,
+                "metadata": meta
+            }
+            for text, meta in items
+        ]
     }
