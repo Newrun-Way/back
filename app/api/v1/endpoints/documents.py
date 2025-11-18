@@ -1,6 +1,7 @@
 # app/api/v1/endpoints/documents.py
 
 from fastapi import APIRouter,HTTPException
+from fastapi.responses import FileResponse
 from pathlib import Path
 from app.core.config import get_settings
 import chromadb
