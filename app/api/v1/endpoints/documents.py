@@ -40,37 +40,48 @@ def list_documents():
 
     return docs
 
-@router.get("/{user_id}/{doc_id}/content")
-def get_document_content(user_id: str, doc_id: str):
-    # 1) 해당 user의 shard 경로
-    shard_dir = f"app/data/vector_store/{user_id}"
+@router.get("/{user_id}/{doc_id}", summary="문서 상세조회 (문단 전체)", tags=["documents"])
+async def get_document_detail(user_id: str, doc_id: str):
+    vector = RAGVectorStore()  # settings 기반으로 자동 샤드 로드
 
-    # 2) Chroma 연결
-    client = chromadb.PersistentClient(path=shard_dir)
-    col = client.get_collection("documents")  # 실제 컬렉션명 맞춰야 함
+    collection = vector.get_collection("documents")
+    if collection is None:
+        raise HTTPException(404, "documents collection not found")
 
-    # 3) doc_id로 chunk 전부 가져오기
-    result = col.get(where={"doc_id": doc_id})
+    # doc_id는 metadata.external_doc_id에 저장해둠
+    results = collection.get(
+        where={
+            "user_id": int(user_id),
+            "external_doc_id": doc_id
+        },
+        include=["documents", "embeddings", "metadatas"]
+    )
 
-    docs = result["documents"]
-    metas = result["metadatas"]
+    if not results or len(results.get("documents", [])) == 0:
+        return {
+            "user_id": user_id,
+            "doc_id": doc_id,
+            "total_chunks": 0,
+            "chunks": []
+        }
 
-    # 4) chunk_index 기준으로 정렬 후 하나의 문서로 합치기
-    items = list(zip(docs, metas))
-    items.sort(key=lambda x: x[1].get("chunk_index", 0))
+    chunks = []
+    docs = results["documents"]
+    metas = results["metadatas"]
 
-    merged_text = "\n".join([doc for doc, _ in items])
+    for i in range(len(docs)):
+        chunks.append({
+            "chunk_id": metas[i].get("paragraph_idx", i),
+            "content": docs[i],
+            "metadata": metas[i]
+        })
+
+    # paragraph_idx 기준 정렬
+    chunks.sort(key=lambda x: x["chunk_id"])
 
     return {
         "user_id": user_id,
         "doc_id": doc_id,
-        "chunk_count": len(items),
-        "content": merged_text,
-        "chunks": [
-            {
-                "index": meta.get("chunk_index"),
-                "content": doc
-            }
-            for doc, meta in items
-        ]
+        "total_chunks": len(chunks),
+        "chunks": chunks
     }
