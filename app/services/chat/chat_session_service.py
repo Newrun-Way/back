@@ -2,7 +2,7 @@ from app.core.db import get_connection
 
 class ChatSessionService:
     def __init__(self):
-        self.db = get_connection
+        self.db = get_connection()
 
     def list_sessions(self, user_id: int):
         cur = self.db.cursor(dictionary=True)
