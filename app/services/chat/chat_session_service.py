@@ -5,7 +5,7 @@ class ChatSessionService:
         self.db = get_connection()
 
     def list_sessions(self, user_id: int):
-        cur = self.db.cursor(dictionary=True)
+        cur = self.db.cursor()
         cur.execute("SELECT * FROM chat_sessions WHERE user_id=%s AND is_deleted=0 ORDER BY updated_at DESC", (user_id,))
         return cur.fetchall()
 
@@ -19,7 +19,7 @@ class ChatSessionService:
         return cur.lastrowid
 
     def get_session(self, session_id: int):
-        cur = self.db.cursor(dictionary=True)
+        cur = self.db.cursor()
         cur.execute("SELECT * FROM chat_sessions WHERE id=%s AND is_deleted=0", (session_id,))
         return cur.fetchone()
 
