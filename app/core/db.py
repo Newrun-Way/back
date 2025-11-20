@@ -1,15 +1,18 @@
 # app/core/db.py
-
 import pymysql
-import os
+import pymysql.cursors
+from app.core.config import get_settings
+
+settings = get_settings()
 
 def get_connection():
     return pymysql.connect(
-        host=os.getenv("DB_HOST", "127.0.0.1"),
-        user=os.getenv("DB_USER", "alain_user"),
-        password=os.getenv("DB_PASSWORD", "2team"),
-        db=os.getenv("DB_NAME", "alain"),
+        host=settings.DB_HOST,
+        user=settings.DB_USER,
+        password=settings.DB_PASSWORD,
+        database=settings.DB_NAME,
+        port=settings.DB_PORT,
         charset="utf8mb4",
-        autocommit=False,
         cursorclass=pymysql.cursors.DictCursor,
+        autocommit=False
     )
