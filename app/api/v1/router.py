@@ -8,7 +8,8 @@ from app.api.v1.endpoints.chat import router as chat_router
 from app.api.v1.endpoints.documents import router as documents_router
 from app.api.v1.endpoints.rag_admin import router as rag_admin_router
 from app.api.v1.endpoints.chat_sessions import router as chat_sessions_router
-
+from app.api.v1.endpoints.dept import router as dept_router
+from app.api.v1.endpoints.project import router as project_router
 
 api_router = APIRouter()
 
@@ -19,3 +20,6 @@ api_router.include_router(chat_router, prefix="/chat", tags=["chat"])
 api_router.include_router(documents_router)
 api_router.include_router(rag_admin_router)
 api_router.include_router(chat_sessions_router)
+
+api_router.include_router(dept_router)
+api_router.include_router(project_router)
