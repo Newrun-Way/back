@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException
 from app.services.chat.chat_session_service import ChatSessionService
 from app.services.chat.chat_message_store import ChatMessageStore
 from app.schemas.chat import ChatRoomDetail, ChatMessage, ChatSession
+from app.services.chat.chat_service import ChatService
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/chat/sessions", tags=["chat"])
 
@@ -41,3 +43,25 @@ def delete_session(session_id: int):
     message_store.delete_messages(str(session_id))
 
     return {"message": "session deleted"}
+
+#4. 채팅 세션 생성
+class SessionCreateRequest(BaseModel):
+    user_id: int
+    title: str | None = None
+
+
+@router.post("/sessions")
+def create_chat_session(req: SessionCreateRequest):
+    """
+    채팅 세션(대화방) 생성 API
+    - DB에 session row 생성
+    - Chroma memory(conversation_id) 초기화는 첫 메시지 때 자동 처리됨
+    """
+    session_id = session_service.create_session(req.user_id, req.title)
+
+    # ChatMemory 는 mem.add_turn 시점에 자동 생성되므로 여기선 ID만 리턴하면 됨.
+    return {
+        "session_id": session_id,
+        "user_id": req.user_id,
+        "title": req.title,
+    }
