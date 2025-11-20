@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from app.services.chat_session_service import ChatSessionService
+from app.services.chat.chat_session_service import ChatSessionService
 from app.services.chat_message_store import ChatMessageStore
 from app.schemas.chat import ChatRoomDetail, ChatMessage, ChatSession
 
