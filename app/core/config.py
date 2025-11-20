@@ -12,10 +12,16 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     HWPLIB_JAR: str | None = None
 
+    #MySQL 연결
+    DB_HOST: str = "127.0.0.1"
+    DB_PORT: int = 3306
+    DB_USER: str = "root"
+    DB_PASSWORD: str = ""
+    DB_NAME: str = "alain_db"
+
     # RAG 설정
     DATA_DIR: str = "data"
     VECTOR_STORE_DIR: str = "app/data/vector_store"
-    # 인덱스 타입: "flat" | "ivf" | "hnsw" (VectorStore 구현이 지원하는 값)
     VECTOR_STORE_INDEX_TYPE: str = "flat"
     # 샤딩 사용 여부 (False면 단일 인덱스)
     SHARDING_ENABLED: bool = True
