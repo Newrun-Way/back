@@ -7,9 +7,11 @@ class ChatMessage(BaseModel):
 
 class ChatSession(BaseModel):
     id: int
+    user_id: int
     title: Optional[str]
-    created_at: str
-    updated_at: str
+    is_deleted: int
+    created_at: datetime
+    updated_at: datetime
 
 class ChatRoomDetail(BaseModel):
     session: ChatSession
