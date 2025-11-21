@@ -8,6 +8,7 @@ service = DeptService()
 
 class DeptCreateRequest(BaseModel):
     dept_name: str
+    description: str
 
 
 @router.get("/")
@@ -17,16 +18,16 @@ def list_dept():
 
 @router.post("/")
 def create_dept(req: DeptCreateRequest):
-    dept_id = service.create(req.dept_name)
-    return {"dept_id": dept_id, "dept_name": req.dept_name}
+    dept_id = service.create(req.dept_name, req.description)
+    return {"dept_id": dept_id, "dept_name": req.dept_name, "description": req.description}
 
 
 @router.put("/{dept_id}")
 def update_dept(dept_id: int, req: DeptCreateRequest):
-    cnt = service.update(dept_id, req.dept_name)
+    cnt = service.update(dept_id, req.dept_name, req.description)
     if cnt == 0:
         raise HTTPException(404, "Department not found")
-    return {"dept_id": dept_id, "dept_name": req.dept_name}
+    return {"dept_id": dept_id, "dept_name": req.dept_name, "description": req.description}
 
 
 @router.delete("/{dept_id}")

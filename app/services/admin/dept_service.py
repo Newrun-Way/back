@@ -12,8 +12,8 @@ class DeptService:
     def create(self, name: str):
         with self.db.cursor() as cur:
             cur.execute(
-                "INSERT INTO dept (dept_name) VALUES (%s)",
-                (name,)
+                "INSERT INTO dept (dept_name, description) VALUES (%s, %s)",
+                (name,description)
             )
             self.db.commit()
             return cur.lastrowid
@@ -21,8 +21,8 @@ class DeptService:
     def update(self, dept_id: int, name: str):
         with self.db.cursor() as cur:
             cur.execute(
-                "UPDATE dept SET dept_name=%s WHERE id=%s",
-                (name, dept_id)
+                "UPDATE dept SET dept_name=%s, description=%s, WHERE id=%s",
+                (name,description, dept_id)
             )
             self.db.commit()
             return cur.rowcount
