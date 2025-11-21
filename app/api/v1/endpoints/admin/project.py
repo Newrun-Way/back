@@ -36,3 +36,11 @@ def delete_project(project_id: int):
     if cnt == 0:
         raise HTTPException(404, "Project not found")
     return {"deleted": True}
+
+
+@router.get("/dept/{dept_id}", response_model=List[ProjectResponse])
+def get_projects_by_dept(dept_id: int):
+    """
+    특정 부서(dept_id)에 속한 프로젝트 목록 조회
+    """
+    return service.get_by_dept_id(dept_id)

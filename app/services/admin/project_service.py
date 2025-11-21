@@ -32,3 +32,24 @@ class ProjectService:
             cur.execute("DELETE FROM projects WHERE id=%s", (project_id,))
             self.db.commit()
             return cur.rowcount
+
+    def get_by_dept_id(self, dept_id: int):
+        with self.db.cursor() as cur:
+            # DB의 컬럼명이 'dept_id'라고 가정하고 작성했습니다.
+            sql = """
+                SELECT project_id, project_name, dept_id
+                FROM projects 
+                WHERE dept_id = %s
+            """
+            cur.execute(sql, (dept_id,))
+            rows = cur.fetchall()
+
+            # 결과를 딕셔너리 리스트로 변환
+            return [
+                {
+                    "project_id": row[0],
+                    "project_name": row[1],
+                    "dept_id": row[2],
+                }
+                for row in rows
+            ]
