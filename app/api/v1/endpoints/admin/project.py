@@ -38,7 +38,7 @@ def delete_project(project_id: int):
     return {"deleted": True}
 
 
-@router.get("/dept/{dept_id}", response_model=List[ProjectResponse])
+@router.get("/dept/{dept_id}")
 def get_projects_by_dept(dept_id: int):
     """
     특정 부서(dept_id)에 속한 프로젝트 목록 조회
