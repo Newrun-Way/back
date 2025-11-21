@@ -6,7 +6,7 @@ class ProjectService:
 
     def list(self):
         with self.db.cursor() as cur:
-            cur.execute("SELECT * FROM projects ORDER BY id DESC")
+            cur.execute("SELECT * FROM projects ORDER BY project_id DESC")
             return cur.fetchall()
 
     def create(self, name: str, dept_id: int):
@@ -29,7 +29,6 @@ class ProjectService:
 
     def delete(self, project_id: int):
         with self.db.cursor() as cur:
-            # id -> project_id로 변경
             cur.execute("DELETE FROM projects WHERE project_id=%s", (project_id,))
             self.db.commit()
             return cur.rowcount
@@ -46,9 +45,9 @@ class ProjectService:
 
             return [
                 {
-                    "project_id": row[0],
-                    "project_name": row[1],
-                    "dept_id": row[2],
+                    "project_id": row["project_id"],    # row[0] -> row["project_id"]
+                    "project_name": row["project_name"],# row[1] -> row["project_name"]
+                    "dept_id": row["dept_id"],          # row[2] -> row["dept_id"]
                 }
                 for row in rows
             ]
