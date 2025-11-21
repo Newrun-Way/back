@@ -10,6 +10,7 @@ from app.api.v1.endpoints.rag_admin import router as rag_admin_router
 from app.api.v1.endpoints.chat_sessions import router as chat_sessions_router
 from app.api.v1.endpoints.admin.dept import router as dept_router
 from app.api.v1.endpoints.admin.project import router as project_router
+from app.api.v1.endpoints.admin.project_permissions import router as project_permission_router
 
 api_router = APIRouter()
 
@@ -23,3 +24,5 @@ api_router.include_router(chat_sessions_router)
 
 api_router.include_router(dept_router)
 api_router.include_router(project_router)
+api_router.include_router(project_permission_router, prefix="/admin")
+
