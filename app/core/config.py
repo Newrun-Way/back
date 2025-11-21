@@ -20,14 +20,17 @@ class Settings(BaseSettings):
     DB_NAME: str = "alain_db"
 
     # RAG 설정
-    DATA_DIR: str = "data"
-    VECTOR_STORE_DIR: str = "app/data/vector_store"
+    DATA_DIR: str = "/app/app/data"
+
+    VECTOR_STORE_DIR: str = "/app/app/data/vector_store"
     VECTOR_STORE_INDEX_TYPE: str = "flat"
-    # 샤딩 사용 여부 (False면 단일 인덱스)
-    SHARDING_ENABLED: bool = True
-    
-    UPLOAD_DIR: str = "app/data/uploads"
-    EXTRACTED_DIR: str = "extracted_results"
+
+    # 샤딩
+    SHARDING_ENABLED: bool = False
+
+    # 업로드/파싱된 파일
+    UPLOAD_DIR: str = "/app/app/data/uploads"
+    EXTRACTED_DIR: str = "/app/app/data/extracted_results"
 
     OPENAI_API_KEY: str = ""
 
