@@ -1,6 +1,5 @@
 # app/api/v1/endpoints/chat.py
-
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.services.chat.chat_service import ChatService
