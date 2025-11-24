@@ -27,7 +27,7 @@ class ChatService:
         self.llm = LLMService()
 
         # [추가] DB에서 유저 권한 정보 가져오는 헬퍼 메서드
-        def _fetch_user_context(self, user_id: int) -> Dict[str, Any]:
+    def _fetch_user_context(self, user_id: int) -> Dict[str, Any]:
             conn = get_connection()
             cursor = conn.cursor()
             try:
