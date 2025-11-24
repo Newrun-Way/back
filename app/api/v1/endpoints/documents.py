@@ -51,8 +51,8 @@ def get_document_detail(doc_id: str):
     - 경로: settings.VECTOR_STORE_DIR / global
     """
 
-    # 1) 샤드 위치: 이제 무조건 'global' 폴더를 바라봅니다.
-    shard_path = Path(settings.VECTOR_STORE_DIR) / GLOBAL_DIR_NAME
+    # 1) 벡터스토어는 설정된 루트 경로를 그대로 사용
+    shard_path = Path(settings.VECTOR_STORE_DIR)
 
     if not shard_path.exists():
         # global 샤드가 아예 없으면 500 또는 404 에러
