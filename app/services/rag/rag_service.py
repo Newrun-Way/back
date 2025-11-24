@@ -48,7 +48,7 @@ class RAGService:
         self.vector_dir = Path(getattr(self.settings, "VECTOR_STORE_DIR", "data/vector_store"))
         print(f"RAG서비스 vector_dir: {self.vector_dir}")
         self.index_type = getattr(self.settings, "VECTOR_STORE_INDEX_TYPE", "flat")
-        self.sharding_enabled = bool(getattr(self.settings, "SHARDING_ENABLED", False))
+        self.sharding_enabled = False
 
         # 단일 모드용 인덱스
         if not self.sharding_enabled:
@@ -99,37 +99,15 @@ class RAGService:
     # ---------------------------------------------------------------------
     @staticmethod
     def _shard_keys_for_index(meta: Dict) -> List[str]:
-        keys: List[str] = []
-        if meta.get("user_id"): keys.append(f"user={meta['user_id']}")
-        for p in meta.get("projects", []) or []: keys.append(f"proj={p}")
-        for d in meta.get("depts", []) or []:    keys.append(f"dept={d}")
-        if not keys: keys.append("global")
-        # 중복 제거(순서 보존)
-        seen=set(); out=[]
-        for k in keys:
-            if k not in seen: seen.add(k); out.append(k)
-        return out
+        return ["global"]
 
     @staticmethod
     def _shard_keys_for_query(user_id: Optional[str], depts: List[str], projects: List[str]) -> List[str]:
-        keys: List[str] = ["global"]  # <-- 항상 'global'을 기본으로 포함
-        if user_id: keys.append(f"user={user_id}")
-        for p in projects or []: keys.append(f"proj={p}")
-        for d in depts or []:    keys.append(f"dept={d}")
-        
-        seen=set(); out=[]
-        for k in keys:
-            if k not in seen: seen.add(k); out.append(k)
-        return out
+        return ["global"]
 
     def _open_shard(self, shard_key: str) -> VectorStore:
-        with self._lock:
-            if shard_key in self._shards:
-                return self._shards[shard_key]
-            sdir = self.vector_dir / shard_key
-            store = self._open_or_create_store(sdir)
-            self._shards[shard_key] = store
-            return store
+        sdir = self.vector_dir / "global"
+        return self._open_or_create_store(sdir)
 
     def _save_shard(self, shard_key: str):
         with self._lock:
@@ -156,6 +134,7 @@ class RAGService:
         return {"indexed": len(docs)}
     
     def index_parsed_paragraphs_sharded(self, parsed: Dict, *, persist: bool = True) -> Dict:
+        #샤딩 제거 -> 글로벌 인덱싱만 수행
         meta = parsed.get("metadata", {}) or {}
         docs = []
         for i, text in enumerate(_iter_paragraph_texts(parsed)):
@@ -167,88 +146,66 @@ class RAGService:
             return {"indexed": 0, "shards": []}
 
         embs = self.embedder.embed_texts([d.page_content for d in docs]).astype(np.float32)
-        shard_keys = self._shard_keys_for_index(meta)
-        total = 0
-        for key in shard_keys:
-            store = self._open_shard(key)
-            store.add_documents(docs, embs)
-            total += len(docs)
-            if persist: self._save_shard(key)
-        return {"indexed": total, "shards": shard_keys}
+        global_store = self.vector_store
+        global_store.add_documents(docs, embs)
+
+        if persist:
+            self._save_store(global_store, self.vector_dir)
+
+        return {"indexed": len(docs), "shards": ["global"]}
     # ---------------------------------------------------------------------
     # Query (단일/샤드)
     # ---------------------------------------------------------------------
-    def query(
-        self,
-        question: str,
-        top_k: Optional[int] = None,
-        *,
-        user_id: Optional[str] = None,
-        depts: Optional[List[str]] = None,
-        projects: Optional[List[str]] = None,
-    ) -> List[Dict]:
+    def query(self, question: str, top_k: Optional[int] = None, *, user=None):
         """
-        SHARDING_ENABLED=False → 단일 인덱스에서 검색
-        True → query_sharded 사용
+        user: {
+          "id": 1,
+          "dept_id": 3,
+          "role": "USER",
+          "projects": [1, 5, 7],
+          "collab_projects": [3, 9]
+        }
         """
-        if self.sharding_enabled:
-            return self.query_sharded(question, top_k=top_k, user_id=user_id, depts=depts or [], projects=projects or [])
-
         k = top_k or getattr(self.settings, "TOP_K", 5)
         threshold = getattr(self.settings, "SIMILARITY_THRESHOLD", 0.7)
+
         q_vec = self.embedder.embed_query(question).astype(np.float32)
-        print(f"질의 임베딩 차원: {q_vec.shape}",threshold)
-        results: List[Tuple[object, float]] = self.vector_store.search(q_vec, top_k=k, threshold=threshold)
+        results = self.vector_store.search(q_vec, top_k=k * 3, threshold=threshold)
 
-        hits: List[Dict] = []
+        authorized = []
         for doc, dist in results:
-            hits.append({
-                "content": doc.page_content,
-                "score": float(dist),
-                "metadata": dict(getattr(doc, "metadata", {})),
-            })
-        return hits
+            meta = getattr(doc, "metadata", {}) or {}
 
-    def query_sharded(
-        self,
-        question: str,
-        top_k: Optional[int] = None,
-        *,
-        user_id: Optional[str] = None,
-        depts: Optional[List[str]] = None,
-        projects: Optional[List[str]] = None,
-    ) -> List[Dict]:
-        k = top_k or getattr(self.settings, "TOP_K", 5)
-        threshold = getattr(self.settings, "SIMILARITY_THRESHOLD", 0.7)
-        depts = depts or []
-        projects = projects or []
+            if self._has_access(user, meta):
+                authorized.append({
+                    "content": doc.page_content,
+                    "score": float(dist),
+                    "metadata": meta,
+                })
 
-        q = self.embedder.embed_query(question).astype(np.float32)
-        shard_keys = self._shard_keys_for_query(user_id=user_id, depts=depts, projects=projects)
+            if len(authorized) >= k:
+                break
 
-        # *** 👇 디버깅 로그 추가 ***
-        print(f"========= RAGService 디버깅 ==========")
-        print(f"질문: {question}")
-        print(f"검색할 샤드 목록: {shard_keys}")
-        # **********************************
+        return authorized
 
-        results_by_shard: Dict[str, List[Tuple[object, float]]] = {}
-        for key in shard_keys:
-            store = self._open_shard(key)
-            results_by_shard[key] = store.search(q, top_k=k, threshold=threshold)
+    def _has_access(self, user, meta):
+        # SUPER_ADMIN → 모든 문서 접근 가능
+        if user["role"] == "SUPER_ADMIN":
+            return True
 
-        merged = self._merge_results(results_by_shard, top_k=k)
+        # 일반 dept 접근
+        if meta.get("dept_id") == user["dept_id"]:
+            return True
 
-        out: List[Dict] = []
-        for shard, doc, dist in merged:
-            meta = dict(getattr(doc, "metadata", {}))
-            meta["shard"] = shard
-            out.append({
-                "content": doc.page_content,
-                "score": float(dist),
-                "metadata": meta,
-            })
-        return out
+        # 사용자가 속한 프로젝트
+        if "project_id" in meta and meta["project_id"] in user.get("projects", []):
+            return True
+
+        # 협업 프로젝트
+        if "project_id" in meta and meta["project_id"] in user.get("collab_projects", []):
+            return True
+
+        return False
 
     @staticmethod
     def _merge_results(results_by_shard: Dict[str, List[Tuple[object, float]]], top_k: int) -> List[Tuple[str, object, float]]:
