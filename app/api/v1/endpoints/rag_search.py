@@ -29,37 +29,32 @@ class VectorSearchResponse(BaseModel):
     top_k: int
     hits: List[VectorSearchHit]
 
+def _load_user_context(self, user_id: int):
+    db = get_connection()
+    cur = db.cursor(pymysql.cursors.DictCursor)
 
-def _load_user_context(user_id: int) -> Dict[str, Any]:
+    # 사용자 정보/권한 조회
+    sql = """
+        SELECT 
+            u.id,
+            u.dept_id,
+            u.project_id,
+            u.role
+        FROM users u
+        WHERE u.id = %s
     """
-    RAGService._has_access 에서 사용하는 user 컨텍스트 생성.
-    - 지금은 최소 정보만: id, dept_id, role
-    - projects / collab_projects 는 TODO
-    """
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            "SELECT id, dept_id, role FROM users WHERE id=%s",
-            (user_id,),
-        )
-        row = cur.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="User not found")
+    cur.execute(sql, (user_id,))
+    row = cur.fetchone()
 
-        # pymysql 기본 cursor → tuple
-        user = {
-            "id": row[0],
-            "dept_id": row[1],
-            "role": row[2],
-            # TODO: 필요시 프로젝트/협업프로젝트 조회해서 채우기
-            "projects": [],
-            "collab_projects": [],
-        }
-        return user
-    finally:
-        cur.close()
-        conn.close()
+    if not row:
+        return None
+
+    return {
+        "id": row["id"],
+        "dept_id": row["dept_id"],
+        "project_id": row["project_id"],
+        "role": row["role"],
+    }
 
 
 @router.post(
