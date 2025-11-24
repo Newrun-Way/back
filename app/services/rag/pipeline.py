@@ -7,9 +7,7 @@ from typing import Optional, Dict, Any
 
 class RAGPipeline:
     """RAG 전체 오케스트레이터 (Retriever + Generator)"""
-
     def __init__(self, settings: Optional[object] = None, **_ignore):
-        # ✅ settings를 옵션으로 받고, 없으면 get_settings() 사용
         self.settings = settings or get_settings()
 
         # Retriever
@@ -29,7 +27,20 @@ class RAGPipeline:
             ),
         )
 
+    # 1 검색 + 답변 생성 (일반 질문용) - user 인자 전달 확인
     def query(self, question: str, user: Optional[Dict[str, Any]] = None, top_k: int = 3):
+        # 1. 문서 검색 (user 권한 체크 포함)
         contexts = self.retriever.query(question, user=user, top_k=top_k)
-        print(f"검색된 컨텍스트 : {contexts}")
+        print(f"검색된 컨텍스트 개수: {len(contexts) if contexts else 0}")
+
+        # 2. LLM 답변 생성 후 반환 (String)
         return self.llm.generate_with_sources(contexts, question)
+
+    # 2 검색만 수행 (ChatService용)
+    def retrieve(self, question: str, user: Optional[Dict[str, Any]] = None, top_k: int = 3):
+        """
+        LLM 생성 없이, 벡터 DB에서 문서만 검색하여 반환합니다.
+        ChatService에서 프롬프트를 직접 구성할 때 사용합니다.
+        """
+        # user 정보를 RAGService.query로 그대로 전달합니다.
+        return self.retriever.query(question, user=user, top_k=top_k)
