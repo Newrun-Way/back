@@ -11,13 +11,17 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     conversation_id: str
     message: str
-
+    user_id: int  # 프론트엔드에서 로그인한 사용자
 
 @router.post("/")
 async def chat(req: ChatRequest):
     service = ChatService()
-    answer = service.chat(
-        conversation_id=req.conversation_id,
-        message=req.message,
-    )
-    return {"answer": answer}
+    try:
+        answer = service.chat(
+            conversation_id=req.conversation_id,
+            message=req.message,
+            user_id=req.user_id
+        )
+        return {"answer": answer}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
