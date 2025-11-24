@@ -9,6 +9,7 @@ import json
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 settings = get_settings()
+GLOBAL_DIR_NAME = "global"
 
 @router.get("/")
 def list_documents():
@@ -42,12 +43,20 @@ def list_documents():
     return docs
 
 
-@router.get("/{user_id}/{doc_id}")
-def get_document_detail(user_id: str, doc_id: str):
-    # 1) 샤드 디렉토리 위치 (폴더명은 'user=1' 그대로 사용)
-    shard_path = Path(settings.VECTOR_STORE_DIR) / user_id
+@router.get("/{doc_id}")
+def get_document_detail(doc_id: str):
+    """
+    문서 상세 조회 (벡터 DB)
+    - user_id 없이 doc_id로만 조회
+    - 경로: settings.VECTOR_STORE_DIR / global
+    """
+
+    # 1) 샤드 위치: 이제 무조건 'global' 폴더를 바라봅니다.
+    shard_path = Path(settings.VECTOR_STORE_DIR) / GLOBAL_DIR_NAME
+
     if not shard_path.exists():
-        raise HTTPException(404, f"Shard {user_id} not found")
+        # global 샤드가 아예 없으면 500 또는 404 에러
+        raise HTTPException(404, f"Global shard not found at {shard_path}")
 
     # 2) 크로마 클라이언트 로드
     client = chromadb.PersistentClient(path=str(shard_path))
@@ -56,31 +65,12 @@ def get_document_detail(user_id: str, doc_id: str):
     try:
         col = client.get_collection("documents")
     except:
-        raise HTTPException(404, "documents collection not found")
+        raise HTTPException(404, "documents collection not found in global shard")
 
-    # ==========================================
-    # [수정됨] user_id 파싱 로직 개선
-    # URL이 "user=1"로 들어오면 -> 숫자 1로 변환하여 검색
-    # ==========================================
-    search_user_id = user_id
-    if isinstance(user_id, str) and user_id.startswith("user="):
-        try:
-            # "user=" 뒷부분을 잘라내고 숫자로 변환
-            search_user_id = int(user_id.split("=")[1])
-        except (IndexError, ValueError):
-            # 변환 실패 시 원래 값 사용
-            pass
-    elif user_id.isdigit():
-        search_user_id = int(user_id)
-
-    # 4) 실제 필터 조건: user_id + external_doc_id 매칭
+    # 4) 실제 필터 조건: user_id 조건 삭제, doc_id만 사용
+    # (global DB에 user_id 메타데이터가 남아있더라도, 입력값이 없으므로 doc_id로만 찾습니다)
     result = col.get(
-        where={
-            "$and": [
-                {"user_id": search_user_id},  # 수정된 search_user_id 사용
-                {"external_doc_id": doc_id}
-            ]
-        },
+        where={"external_doc_id": doc_id},
         include=["documents", "metadatas"]
     )
 
@@ -89,22 +79,20 @@ def get_document_detail(user_id: str, doc_id: str):
 
     if len(docs) == 0:
         return {
-            "user_id": user_id,
             "doc_id": doc_id,
             "chunks": [],
-            "total_chunks": 0
+            "total_chunks": 0,
+            "message": "Document not found in global shard"
         }
 
     # 5) chunk 순서 정렬
     items = list(zip(docs, metas))
-    # paragraph_idx가 없을 경우를 대비해 안전하게 0 처리
     items.sort(key=lambda x: x[1].get("paragraph_idx", 0))
 
     # 6) 문서 merge
     merged = "\n".join([t[0] for t in items])
 
     return {
-        "user_id": user_id,
         "doc_id": doc_id,
         "total_chunks": len(items),
         "content": merged,
@@ -118,37 +106,35 @@ def get_document_detail(user_id: str, doc_id: str):
         ]
     }
 
-@router.get("/download/{user_id}/{doc_id}", summary="문서 다운로드")
-def download_document(user_id: str, doc_id: str):
+@router.get("/download/{doc_id}", summary="문서 다운로드")
+def download_document(doc_id: str):
+    """
+    문서 다운로드 (파일 시스템)
+    - user_id 없이 doc_id로만 조회
+    - 경로: settings.UPLOAD_DIR / global / {doc_id}
+    """
 
-    # 업로드 기본 경로
     base = Path(settings.UPLOAD_DIR)
 
-    # [수정] user_id가 "user=1" 형태라면, 실제 폴더명인 "1"만 추출합니다.
-    target_user_folder = user_id
-    if user_id.startswith("user="):
-        target_user_folder = user_id.split("=")[1]
-
-    # 실제 문서가 저장된 위치 (user=1 대신 1을 사용)
-    doc_dir = base / target_user_folder / doc_id
+    # 1) 파일 경로: 무조건 'global' 폴더 안의 doc_id 폴더를 찾습니다.
+    # 예: /data/upload/global/doc_12345/
+    doc_dir = base / GLOBAL_DIR_NAME / doc_id
 
     if not doc_dir.exists() or not doc_dir.is_dir():
-        # 디버깅을 위해 어떤 경로를 찾으려 했는지 에러 메시지에 포함
         raise HTTPException(404, f"Document folder not found: {doc_dir}")
 
-    # 내부 파일명은 언제나 original.* 형태
+    # 2) 원본 파일 찾기 (original.*)
     files = list(doc_dir.glob("original.*"))
     if not files:
         raise HTTPException(404, f"No original file found in folder: {doc_dir}")
 
     file_path = files[0]
-    file_ext = file_path.suffix  # 실제 파일의 확장자 (.hwp 또는 .hwpx)
+    file_ext = file_path.suffix
 
-    # [수정] doc_id가 이미 실제 확장자로 끝나는지 검사 (대소문자 무시)
+    # 3) 다운로드 파일명 결정 로직
     if doc_id.lower().endswith(file_ext.lower()):
         download_name = doc_id
     else:
-        # 확장자가 없거나, 다른 경우에만 붙여줌
         download_name = f"{doc_id}{file_ext}"
 
     return FileResponse(
