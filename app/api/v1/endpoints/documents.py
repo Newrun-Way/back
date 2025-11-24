@@ -4,11 +4,12 @@ from fastapi import APIRouter,HTTPException
 from fastapi.responses import FileResponse
 from pathlib import Path
 from app.core.config import get_settings
-import chromadb
+from app.services.rag.rag_service import RAGService
 import json
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 settings = get_settings()
+
 GLOBAL_DIR_NAME = "global"
 
 @router.get("/")
@@ -47,28 +48,20 @@ def list_documents():
 def get_document_detail(doc_id: str):
     """
     문서 상세 조회 (벡터 DB)
-    - user_id 없이 doc_id로만 조회
-    - 경로: settings.VECTOR_STORE_DIR / global
     """
 
-    # 1) 벡터스토어는 설정된 루트 경로를 그대로 사용
-    shard_path = Path(settings.VECTOR_STORE_DIR)
-
-    if not shard_path.exists():
-        # global 샤드가 아예 없으면 500 또는 404 에러
-        raise HTTPException(404, f"Global shard not found at {shard_path}")
-
-    # 2) 크로마 클라이언트 로드
-    client = chromadb.PersistentClient(path=str(shard_path))
-
-    # 3) documents 컬렉션 로드
+    # 1) RAG 서비스 인스턴스 생성 (또는 호출)
     try:
-        col = client.get_collection("documents")
-    except:
-        raise HTTPException(404, "documents collection not found in global shard")
+        rag = RAGService()
+        # [중요] RAGService가 들고 있는 collection 객체를 가져옵니다.
+        # 구조에 따라 rag.vector_store.collection 또는 rag.collection 일 수 있습니다.
+        # 보통 VectorStore 클래스 안에 collection이 있습니다.
+        col = rag.vector_store.collection
 
-    # 4) 실제 필터 조건: user_id 조건 삭제, doc_id만 사용
-    # (global DB에 user_id 메타데이터가 남아있더라도, 입력값이 없으므로 doc_id로만 찾습니다)
+    except Exception as e:
+        raise HTTPException(500, f"RAG Service/VectorStore access failed: {e}")
+
+    #2 (global DB에 user_id 메타데이터가 남아있더라도, 입력값이 없으므로 doc_id로만 찾습니다)
     result = col.get(
         where={"external_doc_id": doc_id},
         include=["documents", "metadatas"]
@@ -85,11 +78,11 @@ def get_document_detail(doc_id: str):
             "message": "Document not found in 벡터 DB"
         }
 
-    # 5) chunk 순서 정렬
+    # 3) chunk 순서 정렬
     items = list(zip(docs, metas))
     items.sort(key=lambda x: x[1].get("paragraph_idx", 0))
 
-    # 6) 문서 merge
+    # 4) 문서 merge
     merged = "\n".join([t[0] for t in items])
 
     return {
