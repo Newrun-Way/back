@@ -11,12 +11,15 @@ from app.api.v1.endpoints.chat_sessions import router as chat_sessions_router
 from app.api.v1.endpoints.admin.dept import router as dept_router
 from app.api.v1.endpoints.admin.project import router as project_router
 from app.api.v1.endpoints.admin.project_permissions import router as project_permission_router
+from app.api.v1.endpoints.rag_search import router as rag_search_router
 
 api_router = APIRouter()
 
 api_router.include_router(health_router, prefix="/health", tags=["health"])
 api_router.include_router(parsing_router, prefix="/parsing", tags=["parsing"])
 api_router.include_router(rag_router, prefix="/rag", tags=["rag"])
+api_router.include_router(rag_search_router, prefix="/rag", tags=["rag"])
+
 api_router.include_router(chat_router, prefix="/chat", tags=["chat"])
 api_router.include_router(documents_router)
 api_router.include_router(rag_admin_router)
