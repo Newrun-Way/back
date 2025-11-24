@@ -29,7 +29,7 @@ class VectorSearchResponse(BaseModel):
     top_k: int
     hits: List[VectorSearchHit]
 
-def _load_user_context(self, user_id: int):
+def _load_user_context(user_id: int):
     db = get_connection()
     cur = db.cursor(pymysql.cursors.DictCursor)
 
