@@ -82,7 +82,7 @@ def get_document_detail(doc_id: str):
             "doc_id": doc_id,
             "chunks": [],
             "total_chunks": 0,
-            "message": "Document not found in global shard"
+            "message": "Document not found in 벡터 DB"
         }
 
     # 5) chunk 순서 정렬
@@ -117,7 +117,7 @@ def download_document(doc_id: str):
     base = Path(settings.UPLOAD_DIR)
 
     # 1) 파일 경로: 무조건 'global' 폴더 안의 doc_id 폴더를 찾습니다.
-    # 예: /data/upload/global/doc_12345/
+    # 예: /data/upload/global/감사규정(2024년도 12월 개정).hwp/
     doc_dir = base / GLOBAL_DIR_NAME / doc_id
 
     if not doc_dir.exists() or not doc_dir.is_dir():
