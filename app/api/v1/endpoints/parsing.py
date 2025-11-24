@@ -41,7 +41,8 @@ async def upload_and_parse(
     # 2) 저장 경로 준비
     doc_id = file.filename                     # external_doc_id
     file_ext = Path(file.filename).suffix.lower()
-    bucket = str(user_id)
+    # 기존: bucket = str(user_id)  <-- 유저별 분리 (삭제)
+    bucket = "global"  # <-- 통합 저장소 사용
 
     doc_dir = Path(settings.UPLOAD_DIR) / bucket / doc_id
     doc_dir.mkdir(parents=True, exist_ok=True)
