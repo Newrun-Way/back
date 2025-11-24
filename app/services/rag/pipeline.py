@@ -3,7 +3,7 @@ from app.services.rag.rag_service import RAGService
 from app.services.llm.llm_service import LLMGenerator
 from app.core.config import get_settings
 import os
-from typing import Optional
+from typing import Optional, Dict, Any
 
 class RAGPipeline:
     """RAG 전체 오케스트레이터 (Retriever + Generator)"""
@@ -29,7 +29,7 @@ class RAGPipeline:
             ),
         )
 
-    def query(self, question: str, top_k: int = 3):
-        contexts = self.retriever.query(question, top_k=top_k)
+    def query(self, question: str, user: Optional[Dict[str, Any]] = None, top_k: int = 3):
+        contexts = self.retriever.query(question, user=user, top_k=top_k)
         print(f"검색된 컨텍스트 : {contexts}")
         return self.llm.generate_with_sources(contexts, question)
