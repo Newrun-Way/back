@@ -1,5 +1,5 @@
 # app/api/v1/endpoints/rag_search.py
-
+import pymysql
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
