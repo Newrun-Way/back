@@ -41,10 +41,10 @@ class ChatService:
                     return {"id": user_id, "role": "USER", "dept_id": None, "project_id": None}
 
                 return {
-                    "id": row[0],
-                    "role": row[1],
-                    "dept_id": row[2],
-                    "project_id": row[3]
+                    "id": row["id"],
+                    "role": row["role"],
+                    "dept_id": row["dept_id"],
+                    "project_id": row["project_id"]
                 }
             except Exception as e:
                 print(f"[DB Error] Fetch User Context Failed: {e}")
