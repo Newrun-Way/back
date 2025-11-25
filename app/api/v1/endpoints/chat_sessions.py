@@ -1,3 +1,4 @@
+#app/api/v1/endpoints/chat_sessions.py
 from fastapi import APIRouter, HTTPException
 from app.services.chat.chat_session_service import ChatSessionService
 from app.services.chat.chat_message_store import ChatMessageStore
@@ -17,17 +18,12 @@ def list_sessions(user_id: int):
 
 # 2. 단일 세션 조회 (대화 기록 포함)
 @router.get("/{session_id}", response_model=ChatRoomDetail)
-def get_session(session_id: int):
-    session = session_service.get_session(session_id)
-    if not session:
-        raise HTTPException(404, "session not found")
-
-    messages = message_store.get_messages(str(session_id))
-
-    return {
-        "session": session,
-        "messages": messages
-    }
+def get_chat_session(session_id: int):
+    svc = ChatSessionService()
+    data = svc.get_session_with_messages(session_id)
+    if not data:
+        raise HTTPException(404, "Session not found")
+    return data
 
 # 3. 채팅 세션 삭제 (DB soft delete + Chroma 메시지 삭제)
 @router.delete("/{session_id}")
@@ -50,7 +46,7 @@ class SessionCreateRequest(BaseModel):
     title: str | None = None
 
 
-@router.post("/sessions")
+@router.post("/")
 def create_chat_session(req: SessionCreateRequest):
     """
     채팅 세션(대화방) 생성 API
