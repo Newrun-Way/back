@@ -5,43 +5,19 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from app.core.config import get_settings
 from app.services.rag.rag_service import RAGService
+from app.services.document.document_service import DocumentService
+
 import json
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 settings = get_settings()
 
 GLOBAL_DIR_NAME = "global"
+svc = DocumentService()
 
 @router.get("/")
-def list_documents():
-    base = Path(settings.UPLOAD_DIR)
-    docs = []
-
-    # 1-dept → user_id
-    for user_dir in base.iterdir():
-        if not user_dir.is_dir():
-            continue
-
-        user_id = user_dir.name
-
-        # 2-depth → doc_id
-        for doc_dir in user_dir.iterdir():
-            if not doc_dir.is_dir():
-                continue
-
-            doc_id = doc_dir.name
-
-            # 파일 찾기
-            files = [f.name for f in doc_dir.iterdir() if f.is_file()]
-
-            docs.append({
-                "user_id": user_id,
-                "doc_id": doc_id,
-                "files": files,
-                "path": str(doc_dir)
-            })
-
-    return docs
+def list_documents(dept_id: int | None = None, project_id: int | None = None):
+    return svc.list(dept_id, project_id)
 
 
 @router.get("/{doc_id}")
