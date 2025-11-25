@@ -1,14 +1,19 @@
-# docker-compose.yml
+version: "3.9"
+
 volumes:
   hf_cache:
   st_cache:
 
 services:
-  # 서버(GPU)
-  backend-gpu:
+  # ======================================================
+  # FastAPI (GPU)
+  # ======================================================
+  api:
+    build:
+      context: .
+      target: api          # ← Multi-stage Dockerfile의 API 스테이지 선택
+    container_name: back_api
     profiles: ["gpu"]
-    build: .
-    container_name: back_gpu
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -24,5 +29,47 @@ services:
       - ./data:/app/app/data
       - hf_cache:/opt/hf
       - st_cache:/opt/st
-    gpus: all # ← gpu전체사용
+    gpus: all
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # ======================================================
+  # Celery Worker (CPU)
+  # ======================================================
+  worker:
+    build:
+      context: .
+      target: worker       # ← Multi-stage Dockerfile의 worker 스테이지 선택
+    container_name: back_worker
+    env_file:
+      - .env
+    environment:
+      EMBEDDING_DEVICE: cpu    # Worker는 GPU 불필요
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # ======================================================
+  # Flower Dashboard (CPU)
+  # ======================================================
+  flower:
+    build:
+      context: .
+      target: flower       # ← Multi-stage Dockerfile의 flower 스테이지 선택
+    container_name: back_flower
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # ======================================================
+  # Redis (Message Broker)
+  # ======================================================
+  redis:
+    image: redis:7
+    container_name: back_redis
+    ports:
+      - "6379:6379"
     restart: unless-stopped
