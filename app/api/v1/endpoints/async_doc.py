@@ -40,7 +40,7 @@ async def upload_document(
     # ---- DB 스키마에 맞춘 메타데이터 저장 ----
     metadata = doc_service.create(
         doc_id=doc_id,
-        orginal_filename=file.filename,
+        original_filename=file.filename,
         user_id=user_id,
         dept_id=dept_id,
         project_id=project_id,
