@@ -31,33 +31,37 @@ class DocumentService:
             return cur.fetchone()
 
     def create(
-            self,
-            doc_id,
-            original_filename,
-            user_id,
-            dept_id,
-            project_id,
-            category,
-            file_type,
-            total_size
+        self,
+        doc_id,
+        original_filename,
+        user_id,
+        dept_id,
+        project_id,
+        category,
+        stored_path,
+        file_ext,
+        version=1,
+        status="PENDING",
     ):
         """
         문서 메타데이터 저장
         """
         with self.db.cursor() as cur:
             sql = """
-               INSERT INTO documents (
-                   external_doc_id,
-                   original_filename,
-                   user_id,
-                   dept_id,
-                   project_id,
-                   category,
-                   file_type,
-                   total_size,
-                   upload_date
-               ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-               """
+            INSERT INTO documents (
+                external_doc_id,
+                original_filename,
+                user_id,
+                dept_id,
+                project_id,
+                category,
+                version,
+                upload_date,
+                stored_path,
+                file_ext,
+                status
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """
 
             params = (
                 doc_id,
@@ -66,13 +70,14 @@ class DocumentService:
                 dept_id,
                 project_id,
                 category,
-                file_type,
-                total_size,
-                datetime.now()
+                version,
+                datetime.now(),
+                stored_path,
+                file_ext,
+                status,
             )
 
             cur.execute(sql, params)
             self.db.commit()
 
-        # DB에 방금 저장된 문서 정보 반환
         return self.get(doc_id)
