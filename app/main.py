@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.api.v1.router import api_router as v1_router
+from app.api.v1.endpoints import async_upload
+
 from app.services.rag.pipeline import RAGPipeline
 import os
 
@@ -34,6 +36,7 @@ app.add_middleware(
 )
 
 app.include_router(v1_router, prefix="/api/v1")
+app.include_router(async_upload.router)
 
 
 if __name__ == "__main__":

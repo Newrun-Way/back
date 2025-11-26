@@ -12,7 +12,7 @@ from app.api.v1.endpoints.admin.dept import router as dept_router
 from app.api.v1.endpoints.admin.project import router as project_router
 from app.api.v1.endpoints.admin.project_permissions import router as project_permission_router
 from app.api.v1.endpoints.rag_search import router as rag_search_router
-from app.api.v1.endpoints.upload import router as upload_router
+from app.api.v1.endpoints.async_upload import router as upload_router
 
 api_router = APIRouter()
 
