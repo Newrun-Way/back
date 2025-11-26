@@ -1,6 +1,6 @@
 # app/services/document/document_service.py
-
 from app.core.db import get_connection
+from datetime import datetime
 
 class DocumentService:
     def __init__(self):
@@ -29,3 +29,50 @@ class DocumentService:
             sql = "SELECT * FROM documents WHERE external_doc_id = %s"
             cur.execute(sql, (doc_id,))
             return cur.fetchone()
+
+    def create(
+            self,
+            doc_id,
+            org_filename,
+            user_id,
+            dept_id,
+            project_id,
+            category,
+            file_type,
+            total_size
+    ):
+        """
+        문서 메타데이터 저장
+        """
+        with self.db.cursor() as cur:
+            sql = """
+               INSERT INTO documents (
+                   external_doc_id,
+                   org_filename,
+                   user_id,
+                   dept_id,
+                   project_id,
+                   category,
+                   file_type,
+                   total_size,
+                   upload_date
+               ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+               """
+
+            params = (
+                doc_id,
+                org_filename,
+                user_id,
+                dept_id,
+                project_id,
+                category,
+                file_type,
+                total_size,
+                datetime.now()
+            )
+
+            cur.execute(sql, params)
+            self.db.commit()
+
+        # DB에 방금 저장된 문서 정보 반환
+        return self.get(doc_id)
