@@ -34,7 +34,7 @@ COPY ./app /app/app
 # 공통 환경변수
 # -----------------------------------------------------------
 ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app/app
+ENV PYTHONPATH=/app
 
 # ===========================================================
 # Stage 1 - API 서버 (FastAPI)
