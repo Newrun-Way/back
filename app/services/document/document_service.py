@@ -81,3 +81,14 @@ class DocumentService:
             self.db.commit()
 
         return self.get(doc_id)
+
+    def update_status(self, doc_id, status):
+        with self.db.cursor() as cur:
+            sql = """
+                UPDATE documents
+                SET status = %s
+                WHERE external_doc_id = %s
+            """
+            cur.execute(sql, (status, doc_id))
+            self.db.commit()
+

@@ -52,15 +52,9 @@ async def upload_document(
         status="PENDING"
     )
 
-    # ---- Celery Task 등록 ----
-    task = process_document.apply_async(
-        args=[str(saved_path), metadata]
-    )
-
     return {
-        "task_id": task.id,
         "doc_id": doc_id,
-        "message": "문서 처리 시작"
+        "message": "문서가 업로드되었습니다. 승인 대기 중입니다."
     }
 
 

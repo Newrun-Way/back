@@ -1,69 +1,50 @@
 # app/tasks/rag_tasks.py
-from pathlib import Path
-from datetime import datetime
-from celery import states
-from app.core.celery_app import celery_app
-from app.core.config import get_settings
-from app.core.parser import parse_document
+
+from celery import shared_task
 from app.services.rag.rag_service import RAGService
+from app.core.parser import parse_document
+from app.services.document.document_service import DocumentService
 
-settings = get_settings()
+doc_service = DocumentService()
 
-
-@celery_app.task(bind=True, name="app.tasks.rag_tasks.process_document")
-def process_document(self, task_id: str, file_path: str, metadata_dict: dict):
+@shared_task(bind=True, name="rag.process_document")
+def process_document(self, file_path: str, metadata: dict):
     """
-    비동기 문서 처리 작업
-    - 파일 파싱 (HWP/HWPX)
-    - 청킹 및 임베딩
-    - 벡터스토어 저장
-    - (선택) extracted_results 디렉토리에 결과 저장
+    파싱 → 청킹 → 임베딩 Celery Task
     """
+    doc_id = metadata["doc_id"]
+
     try:
-        # 1단계: 파일 파싱
-        self.update_state(
-            state=states.STARTED,
-            meta={"current_step": "파일 파싱 중...", "progress": 10},
+        # 상태는 approve()에서 이미 PROCESSING 으로 설정됨
+
+        # 1) 파싱
+        self.update_state(state="PROCESSING", meta={"step": "파싱 중..."})
+
+        parsed = parse_document(
+            file_path,
+            doc_id=metadata["doc_id"],
+            user_id=metadata["user_id"],
+            dept_id=metadata["dept_id"],
+            project_id=metadata["project_id"],
+            category=metadata["category"]
         )
 
-        doc_id = metadata_dict.get("doc_id") or Path(file_path).name
-        meta = {
-            **metadata_dict,
-            "doc_id": doc_id,
-            "created_at": datetime.utcnow().isoformat(),
-        }
-
-        parsed = parse_document(file_path, doc_id=doc_id, meta=meta)
-
-        # 2단계: 인덱싱 (우리 RAGService 사용)
-        self.update_state(
-            state=states.STARTED,
-            meta={"current_step": "청킹 및 임베딩 중...", "progress": 60},
-        )
+        # 2) 임베딩
+        self.update_state(state="PROCESSING", meta={"step": "임베딩 중..."})
 
         rag = RAGService()
         rag.index_parsed_paragraphs_sharded(parsed, persist=True)
 
-        # (옵션) 동료 구조 맞추려면 EXTRACTED_DIR에 결과 저장
-        # extracted_dir = Path(settings.EXTRACTED_DIR) / doc_id
-        # extracted_dir.mkdir(parents=True, exist_ok=True)
-        # ... parsed를 json/txt로 저장해두면 owpml1 형식과 호환 가능 ...
-
-        # 3단계: 완료
-        self.update_state(
-            state=states.SUCCESS,
-            meta={"current_step": "완료", "progress": 100},
-        )
+        # 3) 완료 상태 업데이트
+        doc_service.update_status(doc_id, "PARSED")
 
         return {
-            "status": "completed",
+            "status": "PARSED",
             "doc_id": doc_id,
-            "message": "문서 처리 완료",
+            "message": "문서 파싱 및 임베딩 완료"
         }
 
     except Exception as e:
-        self.update_state(
-            state=states.FAILURE,
-            meta={"error": str(e)},
-        )
-        raise
+        # 실패 상태 업데이트
+        doc_service.update_status(doc_id, "FAILED")
+        raise e
