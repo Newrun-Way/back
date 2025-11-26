@@ -40,7 +40,7 @@ class DocumentService:
         category,
         stored_path,
         file_ext,
-        version=1,
+        version,
         status="PENDING",
     ):
         """

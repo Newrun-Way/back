@@ -26,7 +26,8 @@ async def upload_document(
     user_id: int = Form(...),
     dept_id: int = Form(...),
     project_id: int = Form(...),
-    category: str = Form(...)
+    category: str = Form(...),
+    version: str = Form(...)
 ):
     uploads_dir = Path(settings.UPLOAD_DIR)
     uploads_dir.mkdir(parents=True, exist_ok=True)
@@ -47,7 +48,7 @@ async def upload_document(
         category=category,
         stored_path=str(saved_path.relative_to(settings.UPLOAD_DIR)),
         file_ext=Path(file.filename).suffix.lstrip("."),
-        version=1,
+        version=version,
         status="PENDING"
     )
 
