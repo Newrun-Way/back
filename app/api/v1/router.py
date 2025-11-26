@@ -12,11 +12,14 @@ from app.api.v1.endpoints.admin.dept import router as dept_router
 from app.api.v1.endpoints.admin.project import router as project_router
 from app.api.v1.endpoints.admin.project_permissions import router as project_permission_router
 from app.api.v1.endpoints.rag_search import router as rag_search_router
+from app.api.v1.endpoints.upload import router as upload_router
 
 api_router = APIRouter()
 
 api_router.include_router(health_router, prefix="/health", tags=["health"])
-api_router.include_router(parsing_router, prefix="/parsing", tags=["parsing"])
+
+api_router.include_router(parsing_router, prefix="/parsing", tags=["upload"])
+api_router.include_router(upload_router, prefix="/upload", tags=["upload"])
 api_router.include_router(rag_router, tags=["rag"])
 api_router.include_router(rag_search_router, tags=["vector_search"])
 
