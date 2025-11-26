@@ -33,7 +33,7 @@ class DocumentService:
     def create(
             self,
             doc_id,
-            org_filename,
+            original_filename,
             user_id,
             dept_id,
             project_id,
@@ -48,7 +48,7 @@ class DocumentService:
             sql = """
                INSERT INTO documents (
                    external_doc_id,
-                   org_filename,
+                   original_filename,
                    user_id,
                    dept_id,
                    project_id,
@@ -61,7 +61,7 @@ class DocumentService:
 
             params = (
                 doc_id,
-                org_filename,
+                original_filename,
                 user_id,
                 dept_id,
                 project_id,
