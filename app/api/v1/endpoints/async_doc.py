@@ -45,8 +45,10 @@ async def upload_document(
         dept_id=dept_id,
         project_id=project_id,
         category=category,
-        file_type=Path(file.filename).suffix.lstrip("."),
-        total_size=saved_path.stat().st_size
+        stored_path=str(saved_path.relative_to(settings.UPLOAD_DIR)),
+        file_ext=Path(file.filename).suffix.lstrip("."),
+        version=1,
+        status="PENDING"
     )
 
     # ---- Celery Task 등록 ----
