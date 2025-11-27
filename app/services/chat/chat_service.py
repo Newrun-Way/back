@@ -1,6 +1,5 @@
 from pathlib import Path
-from typing import Dict, Any
-
+from typing import Dict, Any, AsyncGenerator
 from app.core.db import get_connection
 from app.core.config import get_settings
 from app.services.rag.pipeline import RAGPipeline
@@ -8,7 +7,6 @@ from app.services.chat.chat_memory_chroma import ChatMemory
 from app.services.chat.prompt_builder import build_prompt
 from app.services.llm.llm_service import LLMService
 from app.services.rag.embedder import DocumentEmbedder
-
 
 class ChatService:
     def __init__(self):
@@ -88,3 +86,44 @@ class ChatService:
         self.mem.add_turn(conversation_id, "assistant", answer)
 
         return answer
+
+    async def chat_stream(
+            self, conversation_id: str, message: str, user_id: int
+    ) -> AsyncGenerator[str, None]:
+
+        # 1. 유저 정보
+        user_context = self._fetch_user_context(user_id)
+
+        # 2. 유저 메시지 저장
+        self.mem.add_turn(conversation_id, "user", message)
+
+        # 3. 기존 대화 / 요약 가져오기
+        summary = self.mem.get_summary(conversation_id)
+        recent = self.mem.get_recent(conversation_id)
+
+        # 4. RAG 검색
+        rag_result = self.rag.retriever.query(message, user=user_context)
+
+        docs = []
+        if isinstance(rag_result, list):
+            if rag_result and isinstance(rag_result[0], dict):
+                docs = [d["content"] for d in rag_result if "content" in d]
+
+        # 5. 프롬프트 생성
+        prompt = build_prompt(summary, recent, docs, message)
+
+        # 6. 스트리밍 LLM 호출
+        answer_collector = ""
+
+        async for tok in self.llm.generate_stream(
+                system_prompt="기업 문서를 기반으로 답변하는 RAG 챗봇. 현재 질문을 최우선 처리하라.",
+                user_prompt=prompt,
+        ):
+            answer_collector += tok
+            yield tok  # SSE로 한 글자씩 전달
+
+        # 7. assistant 메시지 저장
+        self.mem.add_turn(conversation_id, "assistant", answer_collector)
+
+        # 8. 스트리밍 끝
+        return
