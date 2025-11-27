@@ -32,8 +32,11 @@ class DocumentService:
 
     def get_by_id(self, row_id: int):
         with self.db.cursor() as cur:
+            print(f"[DEBUG][SQL] SELECT * FROM documents WHERE id={row_id}")
             cur.execute("SELECT * FROM documents WHERE id=%s", (row_id,))
-            return cur.fetchone()
+            result = cur.fetchone()
+            print(f"[DEBUG][SQL RESULT] {result}")
+            return result
 
     def get_by_external_doc_id(self, external_doc_id: str):
         with self.db.cursor() as cur:

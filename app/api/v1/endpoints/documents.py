@@ -33,30 +33,38 @@ def get_document_detail(doc_pk: int):
         raise HTTPException(404, "문서를 찾을 수 없습니다.")
 
     external_doc_id = doc["external_doc_id"]
-
+    print(f"[DEBUG] external_doc_id from DB: {external_doc_id}")
+    print(f"[DEBUG] stored_path: {doc['stored_path']}")
+    print(f"[DEBUG] status: {doc['status']}")
     # 2) RAG 서비스 접근
     try:
         rag = RAGService()
         col = rag.vector_store.collection
+        print("[DEBUG] RAGService initialized. Vector collection OK.")
     except Exception as e:
         raise HTTPException(500, f"RAGService 초기화 실패: {e}")
 
     # 3) 벡터 DB에서 external_doc_id로 chunk 조회
-    result = col.get(
-        where={"external_doc_id": external_doc_id},
-        include=["documents", "metadatas"]
-    )
+    try:
+        result = col.get(
+            where=query_filter,
+            include=["documents", "metadatas"]
+        )
+    except Exception as e:
+        print("[ERROR] VectorDB get() failed:", e)
+        raise HTTPException(500, f"VectorDB get() failed: {e}")
 
     docs = result.get("documents", [])
     metas = result.get("metadatas", [])
-
+    print(f"[DEBUG] VectorDB returned chunks = {len(docs)}")
+    print(f"[DEBUG] VectorDB raw result keys = {result.keys()}")
     if len(docs) == 0:
         return {
             "id": doc_pk,
             "external_doc_id": external_doc_id,
             "chunks": [],
             "total_chunks": 0,
-            "message": "해당 문서는 아직 파싱/임베딩되지 않았습니다."
+            "message": f"VectorDB에 external_doc_id={external_doc_id} 로 저장된 chunk가 없습니다."
         }
 
     # 4) 정렬
