@@ -34,10 +34,7 @@ class RAGService:
         self.settings = settings or get_settings()
 
         # 구성요소
-        self.embedder = embedder or GLOBAL_EMBEDDER(
-            model_name=getattr(self.settings, "EMBEDDING_MODEL", "BAAI/bge-m3"),
-            device=getattr(self.settings, "EMBEDDING_DEVICE", "cpu"),
-        )
+        self.embedder = GLOBAL_EMBEDDER
 
         self.chunker = chunker or DocumentChunker(
             chunk_size=getattr(self.settings, "CHUNK_SIZE", 800),
