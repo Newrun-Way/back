@@ -119,3 +119,23 @@ class DocumentService:
             """
             cur.execute(sql, (doc_id,))
             self.db.commit()
+
+    # def get_latest_pending_for_user_project(self, user_id: int, project_id: int):
+    #     """
+    #     특정 사용자 + 프로젝트 기준으로
+    #     가장 최근에 업로드된 PENDING 문서를 한 건 가져온다.
+    #     (CREATE 요청에서 target_document_id 생략 시 자동 매칭용)
+    #     """
+    #     with self.db.cursor() as cur:
+    #         sql = """
+    #         SELECT *
+    #         FROM documents
+    #         WHERE user_id = %s
+    #           AND project_id = %s
+    #           AND deleted_at IS NULL
+    #           AND status = 'PENDING'
+    #         ORDER BY created_at DESC
+    #         LIMIT 1
+    #         """
+    #         cur.execute(sql, (user_id, project_id))
+    #         return cur.fetchone()
