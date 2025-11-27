@@ -1,38 +1,73 @@
 # app/services/request/request_service.py
 from app.core.db import get_connection
-from datetime import datetime
+
 
 class RequestService:
     def __init__(self):
         self.db = get_connection()
 
-    def create(self, requester_id, project_id, request_type,
-               target_document_id=None, content=None):
+    # ----------------------------------------
+    # 요청 생성
+    # ----------------------------------------
+    def create(self, requester_id, project_id, request_type, target_document_id, content):
         with self.db.cursor() as cur:
             sql = """
-            INSERT INTO requests (
-                requester_id, project_id, target_document_id,
-                request_type, content, status, created_at
-            ) VALUES (%s,%s,%s,%s,%s,'PENDING',NOW())
+            INSERT INTO requests
+                (requester_id, project_id, request_type,
+                 target_document_id, content, status, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, 'PENDING', NOW(), NOW())
             """
-            cur.execute(sql, (requester_id, project_id, target_document_id,
-                              request_type, content))
+            cur.execute(sql, (requester_id, project_id, request_type,
+                              target_document_id, content))
             self.db.commit()
             return cur.lastrowid
 
-    def get(self, req_id):
+    # ----------------------------------------
+    # 요청 조회
+    # ----------------------------------------
+    def get(self, request_id):
         with self.db.cursor() as cur:
-            cur.execute("SELECT * FROM requests WHERE id=%s", (req_id,))
+            cur.execute("SELECT * FROM requests WHERE id=%s", (request_id,))
             return cur.fetchone()
 
-    def update_status(self, req_id, status, rejection_reason=None):
+    # ----------------------------------------
+    # 요청 상태 업데이트
+    # ----------------------------------------
+    def update_status(self, request_id, status, rejection_reason=None, error_message=None):
         with self.db.cursor() as cur:
             sql = """
             UPDATE requests
             SET status=%s,
                 rejection_reason=%s,
+                error_message=%s,
                 updated_at=NOW()
             WHERE id=%s
             """
-            cur.execute(sql, (status, rejection_reason, req_id))
+            cur.execute(sql, (status, rejection_reason, error_message, request_id))
+            self.db.commit()
+
+    # ----------------------------------------
+    # Celery task_id 저장
+    # ----------------------------------------
+    def save_task_id(self, request_id, task_id):
+        with self.db.cursor() as cur:
+            sql = """
+            UPDATE requests
+            SET celery_task_id=%s, updated_at=NOW()
+            WHERE id=%s
+            """
+            cur.execute(sql, (task_id, request_id))
+            self.db.commit()
+
+    # ----------------------------------------
+    # 실패 메시지 기록용
+    # ----------------------------------------
+    def save_error(self, request_id, message):
+        with self.db.cursor() as cur:
+            sql = """
+            UPDATE requests
+            SET status='FAILED', error_message=%s, updated_at=NOW()
+            WHERE id=%s
+            """
+            cur.execute(sql, (message, request_id))
             self.db.commit()
