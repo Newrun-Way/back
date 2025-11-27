@@ -2,7 +2,7 @@
 임베딩 모듈
 BGE-M3 모델을 사용한 텍스트 임베딩
 """
-
+#app/services/rag/embedder.py
 from typing import List, Union
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -11,8 +11,6 @@ from loguru import logger
 import os
 
 class DocumentEmbedder:
-    """문서 임베딩 클래스"""
-    
     def __init__(
         self,
         model_name: str = "BAAI/bge-m3",

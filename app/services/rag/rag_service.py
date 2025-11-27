@@ -9,7 +9,7 @@ import threading
 import heapq
 
 from app.core.config import get_settings
-from app.services.rag.embedder import DocumentEmbedder
+from app.core.embedder_singleton import GLOBAL_EMBEDDER
 from app.services.rag.vector_store import VectorStore
 from app.services.rag.chunker import DocumentChunker
 
@@ -26,7 +26,7 @@ class RAGService:
     def __init__(
         self,
         settings: Optional[object] = None,
-        embedder: Optional[DocumentEmbedder] = None,
+        embedder: Optional[GLOBAL_EMBEDDER] = None,
         vector_store: Optional[VectorStore] = None,
         chunker: Optional[DocumentChunker] = None,
     ):
@@ -34,7 +34,7 @@ class RAGService:
         self.settings = settings or get_settings()
 
         # 구성요소
-        self.embedder = embedder or DocumentEmbedder(
+        self.embedder = embedder or GLOBAL_EMBEDDER(
             model_name=getattr(self.settings, "EMBEDDING_MODEL", "BAAI/bge-m3"),
             device=getattr(self.settings, "EMBEDDING_DEVICE", "cpu"),
         )

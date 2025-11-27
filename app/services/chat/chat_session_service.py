@@ -1,20 +1,15 @@
 from app.core.db import get_connection
 from app.core.config import get_settings
 from app.services.chat.chat_memory_chroma import ChatMemory
-from app.services.rag.embedder import DocumentEmbedder
+from app.core.embedder_singleton import GLOBAL_EMBEDDER
 from pathlib import Path
 
 
 class ChatSessionService:
     def __init__(self):
         self.db = get_connection()
-
-        # 🔥 ChromaDB와 동일한 초기화 필요
         settings = get_settings()
-        self.embedder = DocumentEmbedder(
-            model_name=settings.EMBEDDING_MODEL,
-            device=settings.EMBEDDING_DEVICE,
-        )
+        self.embedder = GLOBAL_EMBEDDER
         self.memory = ChatMemory(
             persist_dir=Path(settings.VECTOR_STORE_DIR) / "chat",
             embedder=self.embedder

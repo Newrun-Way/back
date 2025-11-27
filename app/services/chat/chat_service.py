@@ -7,15 +7,12 @@ from app.services.rag.pipeline import RAGPipeline
 from app.services.chat.chat_memory_chroma import ChatMemory
 from app.services.chat.prompt_builder import build_prompt
 from app.services.llm.llm_service import LLMService
-from app.services.rag.embedder import DocumentEmbedder
+from app.core.embedder_singleton import GLOBAL_EMBEDDER
 
 class ChatService:
     def __init__(self):
         settings = get_settings()
-        self.embedder = DocumentEmbedder(
-            model_name=settings.EMBEDDING_MODEL,
-            device=settings.EMBEDDING_DEVICE,
-        )
+        self.embedder = GLOBAL_EMBEDDER
         self.rag = RAGPipeline()
 
         self.mem = ChatMemory(
