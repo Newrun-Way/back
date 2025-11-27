@@ -57,7 +57,7 @@ async def upload_document(
     rel_path = saved_path.relative_to(settings.UPLOAD_DIR)
 
     # ---------- 3. DB 저장 ----------
-    doc_service.create(
+    new_doc = doc_service.create(
         doc_id=doc_id,
         original_filename=file.filename,
         user_id=user_id,
@@ -71,6 +71,7 @@ async def upload_document(
     )
 
     return {
+        "id": new_doc.get("id"),
         "doc_id": doc_id,
         "stored_path": str(rel_path),
         "status": "PENDING",
