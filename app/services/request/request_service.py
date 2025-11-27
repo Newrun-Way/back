@@ -6,6 +6,14 @@ class RequestService:
     def __init__(self):
         self.db = get_connection()
 
+    def list(self, status=None):
+        with self.db.cursor() as cur:
+            if status:
+                cur.execute("SELECT * FROM requests WHERE status=%s ORDER BY id DESC", (status,))
+            else:
+                cur.execute("SELECT * FROM requests ORDER BY id DESC")
+            return cur.fetchall()
+
     # ----------------------------------------
     # 요청 생성
     # ----------------------------------------

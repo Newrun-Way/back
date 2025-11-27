@@ -6,6 +6,11 @@ class DocumentService:
     def __init__(self):
         self.db = get_connection()
 
+    def list_all(self):
+        with self.db.cursor() as cur:
+            cur.execute("SELECT * FROM documents ORDER BY id DESC")
+            return cur.fetchall()
+
     def list(self, dept_id=None, project_id=None):
         with self.db.cursor() as cur:
             sql = "SELECT * FROM documents WHERE deleted_at IS NULL"
@@ -22,6 +27,15 @@ class DocumentService:
             sql += " ORDER BY upload_date DESC"
 
             cur.execute(sql, params)
+            return cur.fetchall()
+
+    def list_by_status(self, status: str):
+        with self.db.cursor() as cur:
+            cur.execute("""
+                SELECT * FROM documents
+                WHERE status=%s
+                ORDER BY updated_at DESC
+            """, (status,))
             return cur.fetchall()
 
     def get(self, doc_id):
