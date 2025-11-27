@@ -75,36 +75,21 @@ def get_document_detail(doc_id: str):
         ]
     }
 
-@router.get("/download/{doc_id}", summary="문서 다운로드")
-def download_document(doc_id: str):
-    """
-    문서 다운로드 (파일 시스템)
-    - user_id 없이 doc_id로만 조회
-    - 경로: settings.UPLOAD_DIR / global / {doc_id}
-    """
+@router.get("/download/{doc_id}", summary="문서 다운로드 by PK id")
+def download_document(doc_id: int):
+    # 1) DB 조회 (PK 기준)
+    doc = doc_service.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(404, "문서를 찾을 수 없습니다.")
 
-    base = Path(settings.UPLOAD_DIR)
+    stored_path = doc["stored_path"]  # 예: global/감사규정_20240101_123000/original.hwp
+    file_path = Path(settings.UPLOAD_DIR) / stored_path
 
-    # 1) 파일 경로: 무조건 'global' 폴더 안의 doc_id 폴더를 찾습니다.
-    # 예: /data/upload/global/감사규정(2024년도 12월 개정).hwp/
-    doc_dir = base / GLOBAL_DIR_NAME / doc_id
+    if not file_path.exists():
+        raise HTTPException(404, f"파일을 찾을 수 없습니다: {file_path}")
 
-    if not doc_dir.exists() or not doc_dir.is_dir():
-        raise HTTPException(404, f"Document folder not found: {doc_dir}")
-
-    # 2) 원본 파일 찾기 (original.*)
-    files = list(doc_dir.glob("original.*"))
-    if not files:
-        raise HTTPException(404, f"No original file found in folder: {doc_dir}")
-
-    file_path = files[0]
-    file_ext = file_path.suffix
-
-    # 3) 다운로드 파일명 결정 로직
-    if doc_id.lower().endswith(file_ext.lower()):
-        download_name = doc_id
-    else:
-        download_name = f"{doc_id}{file_ext}"
+    # 다운로드 파일명
+    download_name = doc["original_filename"]
 
     return FileResponse(
         path=str(file_path),
