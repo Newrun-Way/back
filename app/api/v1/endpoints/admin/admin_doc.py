@@ -14,7 +14,7 @@ def approve_document(doc_id: str):
     """
     관리자 승인 → PROCESSING 상태 업데이트 → Celery Task 실행
     """
-    doc = doc_service.get(doc_id)
+    doc = doc_service.get_by_external_doc_id(doc_id)
     if not doc:
         raise HTTPException(404, "문서를 찾을 수 없습니다.")
 
@@ -47,7 +47,7 @@ def approve_document(doc_id: str):
 
 @router.post("/reject/{doc_id}")
 def reject_document(doc_id: str):
-    doc = doc_service.get(doc_id)
+    doc = doc_service.get_by_external_doc_id(doc_id)
     if not doc:
         raise HTTPException(404, "문서를 찾을 수 없습니다.")
 

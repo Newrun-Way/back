@@ -30,6 +30,16 @@ class DocumentService:
             cur.execute(sql, (doc_id,))
             return cur.fetchone()
 
+    def get_by_external_doc_id(self, external_doc_id: str):
+        with self.db.cursor() as cur:
+            cur.execute("""
+                SELECT *
+                FROM documents
+                WHERE external_doc_id = %s
+                  AND deleted_at IS NULL
+            """, (external_doc_id,))
+            return cur.fetchone()
+
     def create(
         self,
         doc_id,
@@ -82,14 +92,14 @@ class DocumentService:
 
         return self.get(doc_id)
 
-    def update_status(self, doc_id, status):
+    def update_status(self, external_doc_id, status):
         with self.db.cursor() as cur:
             sql = """
                 UPDATE documents
                 SET status = %s
                 WHERE external_doc_id = %s
             """
-            cur.execute(sql, (status, doc_id))
+            cur.execute(sql, (status, external_doc_id))
             self.db.commit()
 
     def mark_deleted(self, doc_id):
