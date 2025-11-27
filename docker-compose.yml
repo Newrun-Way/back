@@ -24,6 +24,9 @@ services:
       EMBEDDING_DEVICE: cuda
       HF_HOME: /opt/hf
       SENTENCE_TRANSFORMERS_HOME: /opt/st
+      #셀러리 환경
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
     volumes:
       - ./app:/app/app
       - ./data:/app/app/data

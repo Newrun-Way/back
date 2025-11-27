@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # RAG 설정
     DATA_DIR: str = "/app/app/data"
 
+    #벡터스토어
     VECTOR_STORE_DIR: str = "/app/app/data/vector_store"
     VECTOR_STORE_INDEX_TYPE: str = "flat"
 
@@ -31,6 +32,10 @@ class Settings(BaseSettings):
     # 업로드/파싱된 파일
     UPLOAD_DIR: str = "/app/app/data/uploads"
     EXTRACTED_DIR: str = "/app/app/data/extracted_results"
+
+    #Celery & Redis 설정
+    CELERY_BROKER_URL: str = "redis://redis:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://redis:6379/0"
 
     OPENAI_API_KEY: str = ""
 
