@@ -92,3 +92,12 @@ class DocumentService:
             cur.execute(sql, (status, doc_id))
             self.db.commit()
 
+    def mark_deleted(self, doc_id):
+        with self.db.cursor() as cur:
+            sql = """
+            UPDATE documents
+            SET deleted_at = NOW(), status='DELETED'
+            WHERE external_doc_id=%s
+            """
+            cur.execute(sql, (doc_id,))
+            self.db.commit()
