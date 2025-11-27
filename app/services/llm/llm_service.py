@@ -52,6 +52,7 @@ class LLMService:
                 ],
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
+                stream=True, #스트리밍 테스트  
             )
             answer = response.choices[0].message.content
 
