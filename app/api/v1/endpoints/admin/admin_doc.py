@@ -1,3 +1,8 @@
+#app/api/v1/endpoints/admin/admin_doc.py
+from fastapi import APIRouter
+from app.services.document.document_service import DocumentService
+
+doc_service = DocumentService()
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 @router.get("/documents")
