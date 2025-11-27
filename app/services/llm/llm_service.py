@@ -89,8 +89,7 @@ class LLMService:
         for chunk in stream:
             delta = chunk.choices[0].delta.content
             if delta:
-                for ch in delta:  # 한 글자씩
-                    yield ch
+                yield delta
 
 class LLMGenerator:
     """
