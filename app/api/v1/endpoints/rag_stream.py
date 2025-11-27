@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from app.services.rag.pipeline import RAGPipeline
 import json
 import asyncio
+from typing import Optional, Dict, Any
 
 router = APIRouter(prefix="/sse", tags=["RAG-SSE"])
 
