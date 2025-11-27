@@ -1,8 +1,9 @@
 # app/api/v1/endpoints/rag_admin.py
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pathlib import Path
 import chromadb
 from app.core.config import get_settings
+from app.services.rag.rag_service import RAGService
 
 router = APIRouter(prefix="/rag-admin", tags=["RAG-Admin"])
 settings = get_settings()
@@ -10,90 +11,46 @@ settings = get_settings()
 @router.get("/dump")
 def dump_all_chroma():
     """
-    모든 샤드(user_id 기반) + 모든 컬렉션 + chunk 정보 요약을 한 번에 반환하는 관리자용 API.
-    Swagger에서 바로 조회 가능.
+    ChromaDB 안의 전체 문서를 덤프해서 디버깅하는 API.
+    external_doc_id mismatch 여부 확인 가능.
     """
-    base = Path(settings.VECTOR_STORE_DIR)
-    shards = {}
+    try:
+        rag = RAGService()
+        col = rag.vector_store.collection
+    except Exception as e:
+        raise HTTPException(500, f"Chroma 로드 실패: {e}")
 
-    # 1) 샤드 디렉토리 스캔
-    for shard_dir in base.iterdir():
-        if not shard_dir.is_dir():
-            continue
+    try:
+        result = col.get(include=["documents", "metadatas"], limit=limit)
+    except Exception as e:
+        raise HTTPException(500, f"VectorStore get() 실패: {e}")
 
-        shard_key = shard_dir.name
-        shard_path = str(shard_dir)
+    ids = result.get("ids", [])
+    documents = result.get("documents", [])
+    metadatas = result.get("metadatas", [])
 
-        try:
-            client = chromadb.PersistentClient(path=shard_path)
-            collections = client.list_collections()
-        except Exception as e:
-            shards[shard_key] = {"error": f"Failed to load shard: {e}"}
-            continue
+    dump = []
 
-        shard_info = {}
+    for i in range(len(ids)):
+        meta = metadatas[i] or {}
+        doc_preview = ""
 
-        # 2) 각 컬렉션 조회
-        for col in collections:
-            col_obj = client.get_collection(col.name)
+        if documents[i]:
+            # 문서 첫 80자만 출력
+            doc_preview = documents[i][:80].replace("\n", " ")
 
-            try:
-                data = col_obj.get()
-            except Exception as e:
-                shard_info[col.name] = {"error": f"Failed col.get(): {e}"}
-                continue
-
-            docs = data.get("documents", [])
-            metadatas = data.get("metadatas", [])
-            ids = data.get("ids", [])
-            embeddings = data.get("embeddings", [])
-
-            # 3) preview-friendly 형태로 구성
-            preview_items = []
-            for i in range(len(docs)):
-                doc_preview = docs[i][:200] + "..." if len(docs[i]) > 200 else docs[i]
-                meta = metadatas[i] if i < len(metadatas) else {}
-                preview_items.append({
-                    "id": ids[i] if i < len(ids) else None,
-                    "content_preview": doc_preview,
-                    "metadata": meta,
-                })
-
-            shard_info[col.name] = {
-                "collection_name": col.name,
-                "total_chunks": len(docs),
-                "preview": preview_items[:20],  # 너무 많으면 20개까지만 출력
-                "embedding_size": len(embeddings[0]) if embeddings else 0,
-            }
-
-        shards[shard_key] = shard_info
-
-    return {"shards": shards}
-@router.get("/debug-scan/{shard}")
-def debug_scan(shard: str):
-    """
-    특정 샤드 내부의 컬렉션 메타데이터 10개를 확인하는 디버그용 API
-    실제 저장된 user_id, external_doc_id, paragraph_idx를 확인하는 목적
-    """
-    base = Path(settings.VECTOR_STORE_DIR)
-    shard_path = base / shard
-
-    if not shard_path.exists():
-        return {"error": f"Shard not found: {shard_path}"}
-
-    import chromadb
-    client = chromadb.PersistentClient(path=str(shard_path))
-
-    # 컬렉션 이름 자동 탐색
-    collections = client.list_collections()
-    info = {}
-
-    for col in collections:
-        c = client.get_collection(col.name)
-        data = c.get(include=["metadatas"], limit=20)
-        info[col.name] = data["metadatas"]
+        dump.append({
+            "idx": i,
+            "id": ids[i],
+            "external_doc_id": meta.get("external_doc_id"),
+            "paragraph_idx": meta.get("paragraph_idx"),
+            "project_id": meta.get("project_id"),
+            "user_id": meta.get("user_id"),
+            "category": meta.get("category"),
+            "preview": doc_preview
+        })
 
     return {
-        "shard": shard,
-        "collections": info
+        "count": len(dump),
+        "items": dump
     }
