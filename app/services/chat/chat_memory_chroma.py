@@ -1,5 +1,4 @@
 # app/services/chat/chat_memory_chroma.py
-
 from datetime import datetime
 import chromadb
 from chromadb.config import Settings
@@ -9,6 +8,11 @@ from loguru import logger
 
 
 class ChatMemory:
+    """
+    - 대화 턴을 ChromaDB에 그대로 쌓는다.
+    - 일정 턴 수가 넘으면 요약을 생성하지만, 원본 대화(chat_col)는 삭제하지 않는다.
+    - summary_col에는 각 conversation_id 당 최신 요약만 유지한다.
+    """
     def __init__(self, persist_dir: Path, embedder, summary_trigger_turns=6):
         self.persist_dir = Path(persist_dir)
         self.persist_dir.mkdir(parents=True, exist_ok=True)
@@ -32,9 +36,13 @@ class ChatMemory:
         self.summary_trigger_turns = summary_trigger_turns
 
     # --------------------------
-    # turn add
+    # 턴 추가
     # --------------------------
     def add_turn(self, conversation_id: str, role: str, content: str):
+        """
+        단순 append. 기존 턴은 절대 삭제하지 않는다.
+        요약은 별도 컬렉션(summary_col)에만 쌓인다.
+        """
         emb = self.embedder.embed_texts([content])[0]
 
         uid = f"{conversation_id}:{role}:{datetime.utcnow().timestamp()}"
@@ -54,34 +62,46 @@ class ChatMemory:
         self._auto_summarize(conversation_id)
 
     # --------------------------
-    # recent turns
+    # 최근 턴
     # --------------------------
-    def get_recent(self, conversation_id: str, k=4):
+    def get_recent(self, conversation_id: str, k=20):
+        """
+        기본값 k=20 으로 넉넉하게 최근 턴을 돌려준다.
+        반환 형태: [(document(str), metadata(dict)), ...]
+        """
         data = self.chat_col.get(where={"conversation_id": conversation_id})
 
         items = list(zip(data["documents"], data["metadatas"]))
         items.sort(key=lambda x: x[1]["created_at"])
 
+        if k is None or k <= 0:
+            return items
         return items[-k:]
 
     # --------------------------
-    # summary
+    # 요약
     # --------------------------
     def get_summary(self, conversation_id: str) -> str:
         data = self.summary_col.get(where={"conversation_id": conversation_id})
         if not data["documents"]:
             return ""
+        # 한 개만 유지하는 정책
         return data["documents"][0]
 
     # --------------------------
-    # summarize turn history
+    # 턴 히스토리 요약
     # --------------------------
     def _auto_summarize(self, conversation_id: str):
+        """
+        summary_trigger_turns 이상이면 전체 대화를 요약해서
+        summary_col 에만 저장. chat_col 원본은 삭제하지 않는다.
+        """
         data = self.chat_col.get(where={"conversation_id": conversation_id})
-        if len(data["documents"]) < self.summary_trigger_turns:
+        docs = data.get("documents") or []
+        if len(docs) < self.summary_trigger_turns:
             return
 
-        full_text = "\n".join(data["documents"])
+        full_text = "\n".join(docs)
 
         from app.services.llm.llm_service import LLMService
         llm = LLMService()
@@ -91,8 +111,8 @@ class ChatMemory:
             user_prompt=full_text,
         )
 
-        # 기존 삭제
-        self.chat_col.delete(where={"conversation_id": conversation_id})
+        # 이전 요약 삭제
+        self.summary_col.delete(where={"conversation_id": conversation_id})
 
         emb = self.embedder.embed_texts([summary])[0]
 
