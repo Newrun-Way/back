@@ -9,7 +9,7 @@ router = APIRouter(prefix="/rag-admin", tags=["RAG-Admin"])
 settings = get_settings()
 
 @router.get("/dump")
-def dump_all_chroma():
+def dump_all_chroma(limit: int = 5000):
     """
     ChromaDB 안의 전체 문서를 덤프해서 디버깅하는 API.
     external_doc_id mismatch 여부 확인 가능.
