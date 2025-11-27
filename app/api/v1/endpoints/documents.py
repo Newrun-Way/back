@@ -45,6 +45,9 @@ def get_document_detail(doc_pk: int):
         raise HTTPException(500, f"RAGService 초기화 실패: {e}")
 
     # 3) 벡터 DB에서 external_doc_id로 chunk 조회
+    query_filter = {"external_doc_id": external_doc_id}
+    print(f"[DEBUG] VectorDB Query filter = {query_filter}")
+
     try:
         result = col.get(
             where=query_filter,
