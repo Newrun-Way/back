@@ -52,7 +52,7 @@ class LLMService:
                 ],
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
-                stream=True, #스트리밍 테스트  
+                stream=True, #스트리밍 테스트
             )
             answer = response.choices[0].message.content
 
@@ -74,6 +74,23 @@ class LLMService:
         default_system = "당신은 유용한 AI 어시스턴트입니다."
         return self.generate(default_system, prompt)
 
+    async def generate_stream(self, system_prompt, user_prompt):
+        stream = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            stream=True,
+        )
+
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                for ch in delta:  # 한 글자씩
+                    yield ch
 
 class LLMGenerator:
     """
@@ -201,3 +218,12 @@ class LLMGenerator:
             "sources": sources,
             "context_used": context_str,
         }
+
+    async def generate_stream(self, context: str, question: str):
+        user_prompt = self.user_prompt_template.format(
+            context=context,
+            question=question,
+        )
+
+        async for tok in self.llm.generate_stream(self.system_prompt, user_prompt):
+            yield tok
