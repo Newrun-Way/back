@@ -49,7 +49,7 @@ services:
       - .env
     environment:
       EMBEDDING_DEVICE: cpu    # Worker는 GPU 불필요
-    command: celery -A app.core.celery_app.celery_app worker --loglevel=info -Q rag
+    command: celery -A app.core.celery_app.celery_app worker --loglevel=info
     depends_on:
       - redis
     restart: unless-stopped
