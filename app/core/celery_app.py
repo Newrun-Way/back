@@ -8,6 +8,9 @@ celery_app = Celery(
     "owpml_rag",
     broker="redis://redis:6379/0",        # docker-compose 기준
     backend="redis://redis:6379/1",
+    include=[
+        "app.tasks.rag_tasks"   # ★ task 자동 로드
+    ]
 )
 
 celery_app.conf.update(
