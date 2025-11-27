@@ -110,9 +110,16 @@ class DocumentService:
             )
 
             cur.execute(sql, params)
+            new_pk_id = cur.lastrowid
+            print(f"[DEBUG][SQL1] {new_pk_id}")
             self.db.commit()
+        created_doc = self.get(doc_id)
+        print(f"[DEBUG][SQL2] {created_doc}")
+        if isinstance(created_doc, dict):
+            created_doc['id'] = new_pk_id
+        print(f"[DEBUG][SQL3] {created_doc}")
+        return created_doc
 
-        return self.get(doc_id)
 
     def update_status(self, external_doc_id, status):
         with self.db.cursor() as cur:
