@@ -2,7 +2,6 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from pathlib import Path
 import shutil
-import uuid
 from celery.result import AsyncResult
 
 from app.core.config import get_settings
@@ -17,9 +16,9 @@ router = APIRouter(prefix="/async", tags=["Async Document Pipeline"])
 settings = get_settings()
 doc_service = DocumentService()
 
-# --------------------------
-# 1) 업로드 + 비동기 처리
-# --------------------------
+# ==========================================================
+# 1) 일반 사용자 업로드 (승인 필요)
+# ==========================================================
 @router.post("/upload")
 async def upload_document(
     file: UploadFile = File(...),
@@ -29,40 +28,64 @@ async def upload_document(
     category: str = Form(...),
     version: str = Form(...)
 ):
-    uploads_dir = Path(settings.UPLOAD_DIR)
-    uploads_dir.mkdir(parents=True, exist_ok=True)
+    """
+    일반 사용자 업로드 API
+    - 파일 저장만 수행
+    - documents 테이블에 PENDING 으로 저장
+    - 승인 필요
+    """
 
-    doc_id = f"doc_{uuid.uuid4().hex}"
-    saved_path = uploads_dir / f"{doc_id}_{file.filename}"
+    # ---------- 1. doc_id 생성 ----------
+    clean_name = Path(file.filename).stem.replace(" ", "_")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    doc_id = f"{clean_name}_{ts}"
 
+    # ---------- 2. 저장 경로 통일 ----------
+    # uploads/global/{doc_id}/original.ext
+    base_dir = Path(settings.UPLOAD_DIR) / "global" / doc_id
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    file_ext = Path(file.filename).suffix.lower()
+    saved_path = base_dir / f"original{file_ext}"
+
+    # Write file
     with open(saved_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    # ---- DB 스키마에 맞춘 메타데이터 저장 ----
-    metadata = doc_service.create(
+    # 상대 경로 (DB 저장용)
+    rel_path = saved_path.relative_to(settings.UPLOAD_DIR)
+
+    # ---------- 3. DB 저장 ----------
+    doc_service.create(
         doc_id=doc_id,
         original_filename=file.filename,
         user_id=user_id,
         dept_id=dept_id,
         project_id=project_id,
         category=category,
-        stored_path=str(saved_path.relative_to(settings.UPLOAD_DIR)),
-        file_ext=Path(file.filename).suffix.lstrip("."),
+        stored_path=str(rel_path),
+        file_ext=file_ext.lstrip("."),
         version=version,
         status="PENDING"
     )
 
     return {
         "doc_id": doc_id,
-        "message": "문서가 업로드되었습니다. 승인 대기 중입니다."
+        "stored_path": str(rel_path),
+        "status": "PENDING",
+        "message": "문서 업로드 완료. 승인 대기 중입니다."
     }
 
 
-# --------------------------
-# 2) 상태 조회
-# --------------------------
+
+# ==========================================================
+# 2) 상태 조회 (Celery)
+# ==========================================================
 @router.get("/status/{task_id}")
 def get_status(task_id: str):
+    """
+    Celery Task 상태 조회
+    """
     result = AsyncResult(task_id, app=celery_app)
     return {
         "task_id": task_id,
@@ -71,15 +94,20 @@ def get_status(task_id: str):
     }
 
 
-# --------------------------
-# 3) RAG 질의응답
-# --------------------------
+
+# ==========================================================
+# 3) RAG 검색
+# ==========================================================
 class QueryRequest(BaseModel):
     query: str
     top_k: int | None = 5
 
+
 @router.post("/query")
 def rag_query(req: QueryRequest):
+    """
+    RAG 검색 API
+    """
     try:
         pipeline = RAGPipeline()
         result = pipeline.query(req.query, top_k=req.top_k or 5)
