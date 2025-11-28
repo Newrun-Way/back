@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 from app.services.admin.project_permission_service import ProjectPermissionService
 
-router = APIRouter(prefix="/project", tags=["admin-project"])
+router = APIRouter(prefix="/project", tags=["admin"])
 service = ProjectPermissionService()
 
 

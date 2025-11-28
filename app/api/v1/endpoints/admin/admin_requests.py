@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from app.services.request.request_service import RequestService
 from app.services.document.document_service import DocumentService
 
-router = APIRouter(prefix="/admin/requests", tags=["Admin-Requests"])
+router = APIRouter(prefix="/admin/requests", tags=["admin"])
 
 req_service = RequestService()
 doc_service = DocumentService()

@@ -12,7 +12,7 @@ from app.services.document.document_service import DocumentService
 from app.services.rag.pipeline import RAGPipeline
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/async", tags=["Async Document Pipeline"])
+router = APIRouter(prefix="/async", tags=["Documents_async"])
 
 settings = get_settings()
 doc_service = DocumentService()
