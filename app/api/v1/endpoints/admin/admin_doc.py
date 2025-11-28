@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from app.services.document.document_service import DocumentService
 
 doc_service = DocumentService()
-router = APIRouter(prefix="/admin", tags=["Admin"])
+router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.get("/documents")
 def admin_list_documents():
