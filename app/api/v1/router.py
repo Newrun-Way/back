@@ -14,7 +14,7 @@ from app.api.v1.endpoints.admin.project_permissions import router as project_per
 from app.api.v1.endpoints.rag_search import router as rag_search_router
 from app.api.v1.endpoints.admin.admin_doc import router as admin_doc_router
 from app.api.v1.endpoints.requests import router as requests_router
-from app.api.v1.endpoints.admin.admin_request import router as admin_request_router
+from app.api.v1.endpoints.admin.admin_requests import router as admin_request_router
 
 # from app.api.v1.endpoints.rag_stream import router as rag_stream_router
 
