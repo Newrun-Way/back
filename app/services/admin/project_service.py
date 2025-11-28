@@ -41,7 +41,7 @@ class ProjectService:
     def get_by_dept_id(self, dept_id: int):
         with self.db.cursor() as cur:
             sql = """
-                SELECT project_id, project_name, dept_id
+                SELECT project_id, project_name, dept_id, status
                 FROM projects 
                 WHERE dept_id = %s
             """
@@ -50,9 +50,10 @@ class ProjectService:
 
             return [
                 {
-                    "project_id": row["project_id"],    # row[0] -> row["project_id"]
-                    "project_name": row["project_name"],# row[1] -> row["project_name"]
-                    "dept_id": row["dept_id"],          # row[2] -> row["dept_id"]
+                    "project_id": row["project_id"],
+                    "project_name": row["project_name"],
+                    "dept_id": row["dept_id"],
+                    "status": row["status"],
                 }
                 for row in rows
             ]
