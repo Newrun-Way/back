@@ -89,3 +89,35 @@ def admin_overview():
         "documents_count": len(docs),
         "requests_count": len(reqs)
     }
+# ---------------------------------------
+# 6) 부서별 요청 조회
+# ---------------------------------------
+@router.get("/by-dept/{dept_id}")
+def list_requests_by_dept(
+    dept_id: int,
+    status: str | None = None,
+    # user값으로 권한체크
+):
+    """
+    특정 부서의 요청 리스트 조회.
+    - SUPER_ADMIN: 모든 부서 조회 가능
+    - MANAGER: 자기 부서만 조회 가능
+    """
+
+    rows = req_service.list_by_dept(dept_id, status=status)
+    return {"count": len(rows), "items": rows}
+# ---------------------------------------
+# 7) 프로젝트별 요청 조회
+# ---------------------------------------
+@router.get("/by-project/{project_id}")
+def list_requests_by_project(
+    project_id: int,
+    status: str | None = None,
+    # user값으로 권한체크
+):
+    """
+    특정 프로젝트의 요청 리스트 조회.
+    """
+    # 권한 체크는 req_service에서(또는 별도 ACL) 할 수도 있음
+    rows = req_service.list_by_project(project_id, status=status)
+    return {"count": len(rows), "items": rows}

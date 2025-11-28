@@ -79,3 +79,41 @@ class RequestService:
             """
             cur.execute(sql, (message, request_id))
             self.db.commit()
+
+    def list_by_dept(self, dept_id: int, status: str | None = None):
+        with self.db.cursor() as cur:
+            sql = """
+            SELECT r.*, u.user_name
+            FROM requests r
+            JOIN users u ON r.requester_id = u.id
+            WHERE u.dept_id = %s
+            """
+            params = [dept_id]
+
+            if status:
+                sql += " AND r.status = %s"
+                params.append(status)
+
+            sql += " ORDER BY r.created_at DESC"
+
+            cur.execute(sql, params)
+            return cur.fetchall()
+
+    def list_by_project(self, project_id: int, status: str | None = None):
+        with self.db.cursor() as cur:
+            sql = """
+            SELECT r.*, u.user_name
+            FROM requests r
+            JOIN users u ON r.requester_id = u.id
+            WHERE r.project_id = %s
+            """
+            params = [project_id]
+
+            if status:
+                sql += " AND r.status = %s"
+                params.append(status)
+
+            sql += " ORDER BY r.created_at DESC"
+
+            cur.execute(sql, params)
+            return cur.fetchall()
