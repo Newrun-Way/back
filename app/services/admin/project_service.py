@@ -18,12 +18,17 @@ class ProjectService:
             self.db.commit()
             return cur.lastrowid
 
-    def update(self, project_id: int, name: str, dept_id: int):
+    def update(self, project_id: int, name: str, dept_id: int, status: str | None):
         with self.db.cursor() as cur:
-            cur.execute(
-                "UPDATE projects SET project_name=%s, dept_id=%s WHERE project_id=%s",
-                (name, dept_id, project_id)
-            )
+            sql = """
+                UPDATE projects
+                SET project_name = %s,
+                    dept_id = %s,
+                    status = COALESCE(%s, status)   -- status가 None이면 기존 값 유지
+                WHERE project_id = %s
+            """
+
+            cur.execute(sql, (name, dept_id, status, project_id))
             self.db.commit()
             return cur.rowcount
 

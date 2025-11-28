@@ -9,6 +9,7 @@ service = ProjectService()
 class ProjectCreateRequest(BaseModel):
     project_name: str
     dept_id: int
+    status: str | None = None  # ACTIVE, COMPLETED, ARCHIVED
 
 
 @router.get("/")
@@ -24,10 +25,10 @@ def create_project(req: ProjectCreateRequest):
 
 @router.put("/{project_id}")
 def update_project(project_id: int, req: ProjectCreateRequest):
-    cnt = service.update(project_id, req.project_name, req.dept_id)
+    cnt = service.update(project_id, req.project_name, req.dept_id, req.status)
     if cnt == 0:
         raise HTTPException(404, "Project not found")
-    return {"project_id": project_id, "project_name": req.project_name, "dept_id": req.dept_id}
+    return {"project_id": project_id, "project_name": req.project_name, "dept_id": req.dept_id, "status": req.status}
 
 
 @router.delete("/{project_id}")
