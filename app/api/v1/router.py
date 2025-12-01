@@ -24,7 +24,7 @@ api_router.include_router(health_router, prefix="/health", tags=["health"])
 
 api_router.include_router(parsing_router, prefix="/parsing", tags=["admin"])
 api_router.include_router(rag_router)
-api_router.include_router(rag_search_router, tags=["vector_search"])
+api_router.include_router(rag_search_router)
 
 api_router.include_router(chat_router, prefix="/chat", tags=["chat"])
 api_router.include_router(documents_router)

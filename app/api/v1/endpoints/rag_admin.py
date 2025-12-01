@@ -5,7 +5,7 @@ import chromadb
 from app.core.config import get_settings
 from app.services.rag.rag_service import RAGService
 
-router = APIRouter(prefix="/rag-admin", tags=["RAG-Admin"])
+router = APIRouter(prefix="/rag-admin", tags=["dev"])
 settings = get_settings()
 
 @router.get("/dump")
