@@ -3,6 +3,7 @@ version: "3.9"
 volumes:
   hf_cache:
   st_cache:
+  redis_data:
 
 services:
   # ======================================================
