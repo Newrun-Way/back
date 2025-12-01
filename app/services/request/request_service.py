@@ -8,10 +8,25 @@ class RequestService:
 
     def list(self, status=None):
         with self.db.cursor() as cur:
+            base_query = """
+                            SELECT 
+                                r.*, 
+                                u.user_name, 
+                                p.name as project_name, 
+                                d.original_filename as document_name
+                            FROM requests r
+                            LEFT JOIN users u ON r.requester_id = u.id
+                            LEFT JOIN projects p ON r.project_id = p.id
+                            LEFT JOIN documents d ON r.target_document_id = d.id
+                        """
+
             if status:
-                cur.execute("SELECT * FROM requests WHERE status=%s ORDER BY id DESC", (status,))
+                sql = base_query + " WHERE r.status=%s ORDER BY r.id DESC"
+                cur.execute(sql, (status,))
             else:
-                cur.execute("SELECT * FROM requests ORDER BY id DESC")
+                sql = base_query + " ORDER BY r.id DESC"
+                cur.execute(sql)
+
             return cur.fetchall()
 
     # ----------------------------------------
@@ -83,9 +98,15 @@ class RequestService:
     def list_by_dept(self, dept_id: int, status: str | None = None):
         with self.db.cursor() as cur:
             sql = """
-            SELECT r.*, u.user_name
+            SELECT 
+                r.*, 
+                u.user_name,
+                p.name as project_name,
+                d.original_filename as document_name
             FROM requests r
             JOIN users u ON r.requester_id = u.id
+            LEFT JOIN projects p ON r.project_id = p.id
+            LEFT JOIN documents d ON r.target_document_id = d.id
             WHERE u.dept_id = %s
             """
             params = [dept_id]
@@ -102,9 +123,15 @@ class RequestService:
     def list_by_project(self, project_id: int, status: str | None = None):
         with self.db.cursor() as cur:
             sql = """
-            SELECT r.*, u.user_name
+            SELECT 
+                r.*, 
+                u.user_name,
+                p.name as project_name,
+                d.original_filename as document_name
             FROM requests r
             JOIN users u ON r.requester_id = u.id
+            LEFT JOIN projects p ON r.project_id = p.id
+            LEFT JOIN documents d ON r.target_document_id = d.id
             WHERE r.project_id = %s
             """
             params = [project_id]
