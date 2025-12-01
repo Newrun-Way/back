@@ -12,7 +12,7 @@ class RequestService:
                             SELECT 
                                 r.*, 
                                 u.user_name, 
-                                p.name as project_name, 
+                                p.project_name as project_name, 
                                 d.original_filename as document_name
                             FROM requests r
                             LEFT JOIN users u ON r.requester_id = u.id
@@ -101,7 +101,7 @@ class RequestService:
             SELECT 
                 r.*, 
                 u.user_name,
-                p.name as project_name,
+                p.project_name as project_name,
                 d.original_filename as document_name
             FROM requests r
             JOIN users u ON r.requester_id = u.id
@@ -126,7 +126,7 @@ class RequestService:
             SELECT 
                 r.*, 
                 u.user_name,
-                p.name as project_name,
+                p.project_name as project_name,
                 d.original_filename as document_name
             FROM requests r
             JOIN users u ON r.requester_id = u.id
