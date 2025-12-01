@@ -60,8 +60,9 @@ services:
   flower:
     build:
       context: .
-      target: flower       # ← Multi-stage Dockerfile의 flower 스테이지 선택
+      target: flower
     container_name: back_flower
+    command: celery -A app.core.celery_app.celery_app flower --port=5555
     ports:
       - "5555:5555"
     depends_on:
