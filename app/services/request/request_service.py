@@ -16,7 +16,7 @@ class RequestService:
                                 d.original_filename as document_name
                             FROM requests r
                             LEFT JOIN users u ON r.requester_id = u.id
-                            LEFT JOIN projects p ON r.project_id = p.id
+                            LEFT JOIN projects p ON r.project_id = p.project_id
                             LEFT JOIN documents d ON r.target_document_id = d.id
                         """
 
@@ -105,7 +105,7 @@ class RequestService:
                 d.original_filename as document_name
             FROM requests r
             JOIN users u ON r.requester_id = u.id
-            LEFT JOIN projects p ON r.project_id = p.id
+            LEFT JOIN projects p ON r.project_id = p.project_id
             LEFT JOIN documents d ON r.target_document_id = d.id
             WHERE u.dept_id = %s
             """
@@ -130,7 +130,7 @@ class RequestService:
                 d.original_filename as document_name
             FROM requests r
             JOIN users u ON r.requester_id = u.id
-            LEFT JOIN projects p ON r.project_id = p.id
+            LEFT JOIN projects p ON r.project_id = p.project_id
             LEFT JOIN documents d ON r.target_document_id = d.id
             WHERE r.project_id = %s
             """
