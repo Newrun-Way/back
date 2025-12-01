@@ -3,7 +3,7 @@ from fastapi import APIRouter, Body, HTTPException
 from typing import Any, Dict
 from app.services.rag.pipeline import RAGPipeline
 
-router = APIRouter(prefix="/rag")
+router = APIRouter(prefix="/rag", tags=["dev"])
 
 @router.post("/query")
 async def rag_query(payload: Dict[str, Any] = Body(...)):

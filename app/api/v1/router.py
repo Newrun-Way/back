@@ -22,7 +22,7 @@ api_router = APIRouter()
 
 api_router.include_router(health_router, prefix="/health", tags=["health"])
 
-api_router.include_router(parsing_router, prefix="/parsing", tags=["upload"])
+api_router.include_router(parsing_router, prefix="/parsing", tags=["admin"])
 api_router.include_router(rag_router)
 api_router.include_router(rag_search_router, tags=["vector_search"])
 

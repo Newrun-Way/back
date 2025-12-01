@@ -61,7 +61,7 @@ def _load_user_context(user_id: int):
     "/vector-search",
     response_model=VectorSearchResponse,
     summary="벡터 검색 (컨텍스트만 반환)",
-    tags=["rag"],
+    tags=["dev"],
 )
 def vector_search(payload: VectorSearchRequest):
     """
