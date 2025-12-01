@@ -19,5 +19,6 @@ passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 redis==5.0.1
 celery==5.3.4
+flower
 aiofiles==23.2.1
 
