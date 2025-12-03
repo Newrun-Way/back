@@ -79,8 +79,8 @@ def approve_request(req_id: int):
     if not req:
         raise HTTPException(404, "Request not found")
 
-    if req["status"] != "PENDING":
-        raise HTTPException(400, "이미 처리된 요청입니다.")
+    if req["status"] not in ("PENDING", "FAILED"):
+        raise HTTPException(400, f"현재 상태({req['status']})에서는 재시작할 수 없습니다.")
 
     req_type = req["request_type"]
     target_pk = req["target_document_id"]
