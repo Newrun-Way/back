@@ -1,6 +1,7 @@
 # app/services/rag/vector_store.py
 
 import chromadb
+from chromadb import Client
 from chromadb.config import Settings
 from pathlib import Path
 from loguru import logger
@@ -19,7 +20,7 @@ class VectorStore:
     def __init__(
             self,
             persist_dir: Path,  # ChromaDB는 저장 경로가 필수
-            collection_name: str = "documents",
+            collection_name: str = "global",
             embedding_dim: int = None,  # FAISS 호환용 (사용 X)
             index_type: str = None  # FAISS 호환용 (사용 X)
     ):
@@ -30,18 +31,21 @@ class VectorStore:
             embedding_dim: (무시됨) FAISS 호환용
             index_type: (무시됨) FAISS 호환용
         """
-        self.persist_dir = Path(persist_dir)
+        self.persist_dir = Path(persist_dir) / "global"
         self.persist_dir.mkdir(parents=True, exist_ok=True)
 
-        # FAISS의 init 인자를 받아도 에러가 나지 않도록 처리
-        if embedding_dim is not None:
-            logger.warning(f"ChromaDB는 'embedding_dim'({embedding_dim}) 인자를 init에서 사용하지 않습니다.")
-        if index_type is not None:
-            logger.warning(f"ChromaDB는 'index_type'('{index_type}') 인자를 init에서 사용하지 않습니다.")
+        ## FAISS의 init 인자를 받아도 에러가 나지 않도록 처리
+        # if embedding_dim is not None:
+        #     logger.warning(f"ChromaDB는 'embedding_dim'({embedding_dim}) 인자를 init에서 사용하지 않습니다.")
+        # if index_type is not None:
+        #     logger.warning(f"ChromaDB는 'index_type'('{index_type}') 인자를 init에서 사용하지 않습니다.")
 
-        self.client = chromadb.PersistentClient(
-            path=str(self.persist_dir),
-            settings=Settings(anonymized_telemetry=False)
+        self.client = Client(
+            Settings(
+                chroma_db_impl="duckdb+parquet",
+                persist_directory=str(self.persist_dir),
+                anonymized_telemetry=False,
+            )
         )
 
         self.collection_name = collection_name
@@ -53,7 +57,8 @@ class VectorStore:
         # ID 생성을 위해 현재 문서 수 추적
         self.doc_count = self.collection.count()
         logger.info(
-            f"ChromaDB VectorStore 초기화: path={self.persist_dir}, collection={self.collection_name} (로드된 문서: {self.doc_count}개)")
+            f"[ChromaDB] VectorStore 초기화: path={self.persist_dir},"
+            f"collection={self.collection_name} (로드된 문서: {self.doc_count}개)")
 
     def add_documents(
             self,
