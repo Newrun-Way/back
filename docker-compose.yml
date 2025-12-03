@@ -27,7 +27,7 @@ services:
       SENTENCE_TRANSFORMERS_HOME: /opt/st
       #셀러리 환경
       CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
     volumes:
       - ./app:/app/app
       - ./data:/app/app/data
@@ -66,7 +66,12 @@ services:
       context: .
       target: flower
     container_name: back_flower
-    command: celery -A app.core.celery_app.celery_app flower --port=5555
+    command: >
+      celery -A app.core.celery_app.celery_app flower
+      --port=5555
+      --broker=redis://redis:6379/0
+      --result-backend=redis://redis:6379/1
+      --persistent=True
     ports:
       - "5555:5555"
     depends_on:

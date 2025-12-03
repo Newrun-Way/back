@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     #Celery & Redis 설정
     CELERY_BROKER_URL: str = "redis://redis:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://redis:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://redis:6379/1"
     REDIS_URL: str = "redis://redis:6379/0"
     OPENAI_API_KEY: str = ""
 
