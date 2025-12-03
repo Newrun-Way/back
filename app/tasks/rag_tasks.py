@@ -1,5 +1,6 @@
 # app/tasks/rag_tasks.py
-
+import json
+import redis
 from celery import shared_task
 from pathlib import Path
 import traceback
@@ -11,6 +12,8 @@ from app.core.parser import parse_document
 from app.core.config import get_settings
 
 settings = get_settings()
+redis_client = redis.Redis.from_url(settings.REDIS_URL)
+
 
 @shared_task(bind=True)
 def process_document(self, file_path: str, metadata: dict):
@@ -26,7 +29,7 @@ def process_document(self, file_path: str, metadata: dict):
         if not path.exists():
             raise FileNotFoundError(f"파일을 찾을 수 없습니다: {file_path}")
 
-        # 2) 파싱 (실제 파서)
+        # 2) 파싱
         parsed = parse_document(
             str(path),
             doc_id=metadata["doc_id"],
@@ -46,6 +49,16 @@ def process_document(self, file_path: str, metadata: dict):
         # 5) 요청 상태 = DONE
         if request_id:
             req_service.update_status(request_id, "DONE")
+
+        # 6) SSE publish — 성공 알림
+        redis_client.publish(
+            f"request-events:{request_id}",
+            json.dumps({
+                "status": "DONE",
+                "doc_id": doc_id,
+                "request_id": request_id,
+            })
+        )
 
         return {
             "doc_id": doc_id,
@@ -75,6 +88,15 @@ def process_document(self, file_path: str, metadata: dict):
         except:
             pass
 
+        # 7) SSE publish — 실패 알림
+        redis_client.publish(
+            f"request-events:{request_id}",
+            json.dumps({
+                "status": "FAILED",
+                "request_id": request_id,
+                "error": error_message
+            })
+        )
         return {
             "doc_id": doc_id,
             "request_id": request_id,
