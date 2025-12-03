@@ -30,13 +30,16 @@ def process_document(self, file_path: str, metadata: dict):
             raise FileNotFoundError(f"파일을 찾을 수 없습니다: {file_path}")
 
         # 2) 파싱
+        meta = {
+            "user_id": metadata.get("user_id"),
+            "dept_id": metadata.get("dept_id"),
+            "project_id": metadata.get("project_id"),
+            "category": metadata.get("category"),
+        }
         parsed = parse_document(
             str(path),
             doc_id=metadata["doc_id"],
-            user_id=metadata.get("user_id"),
-            dept_id=metadata.get("dept_id"),
-            project_id=metadata.get("project_id"),
-            category=metadata.get("category"),
+            meta=meta,
         )
 
         # 3) 청킹/임베딩
