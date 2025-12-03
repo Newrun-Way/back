@@ -1,7 +1,7 @@
 # app/services/rag/vector_store.py
 
 import chromadb
-from chromadb.config import Settings
+# from chromadb.config import Settings
 from pathlib import Path
 from loguru import logger
 from typing import List, Tuple, Dict, Optional
