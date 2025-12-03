@@ -42,8 +42,7 @@ class VectorStore:
         # 2. 클라이언트 초기화
         try:
             self.client = chromadb.PersistentClient(
-                path=str(self.persist_dir),
-                settings=Settings(anonymized_telemetry=False)
+                path=str(self.persist_dir)
             )
         except Exception as e:
             logger.error(f"ChromaDB Client 초기화 실패: {e}")
