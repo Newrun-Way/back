@@ -15,7 +15,7 @@ from app.api.v1.endpoints.rag_search import router as rag_search_router
 from app.api.v1.endpoints.admin.admin_doc import router as admin_doc_router
 from app.api.v1.endpoints.requests import router as requests_router
 from app.api.v1.endpoints.admin.admin_requests import router as admin_request_router
-
+from app.api.v1.endpoints.events import router as events_router
 # from app.api.v1.endpoints.rag_stream import router as rag_stream_router
 
 api_router = APIRouter()
@@ -39,3 +39,4 @@ api_router.include_router(admin_doc_router)
 api_router.include_router(requests_router)
 api_router.include_router(admin_request_router)
 # api_router.include_router(rag_stream_router)
+api_router.include_router(events_router, prefix="/events", tags=["events"])
