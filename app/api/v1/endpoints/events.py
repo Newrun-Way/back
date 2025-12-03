@@ -10,7 +10,7 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-router = APIRouter(prefix="/events", tags=["events"])
+router = APIRouter()
 
 
 async def redis_subscribe(channel_name: str):
@@ -43,7 +43,7 @@ async def redis_subscribe(channel_name: str):
         raise
 
 
-@router.get("/{request_id}")
+@router.get("/request/{request_id}")
 async def sse_request_stream(request_id: int):
     """
     특정 request_id에 대한 SSE 스트림
