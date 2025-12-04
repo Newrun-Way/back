@@ -57,7 +57,8 @@ RUN pip install --no-cache-dir \
       celery \
       flower \
       redis \
-      pydantic-settings
+      pydantic-settings \
+      pymysql
 
 # 2. 소스 코드 복사
 # - Celery가 설정을 읽을 때 app/core/celery_app.py -> config.py 순으로 참조하므로 코드가 필요합니다.
