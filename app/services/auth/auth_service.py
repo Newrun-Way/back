@@ -1,22 +1,18 @@
 from app.core.db import get_connection
 from datetime import datetime
 from passlib.context import CryptContext
-
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    bcrypt__ident="2b",
-    deprecated="auto",
-)
+import bcrypt
 
 class AuthService:
     def __init__(self):
         self.db = get_connection()
 
     def hash_password(self, raw_pw: str) -> str:
-        return pwd_context.hash(raw_pw)
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(raw_pw.encode("utf-8"), salt).decode("utf-8")
 
     def verify_password(self, raw_pw: str, hashed_pw: str) -> bool:
-        return pwd_context.verify(raw_pw, hashed_pw)
+        return bcrypt.checkpw(raw_pw.encode("utf-8"), hashed_pw.encode("utf-8"))
 
     def get_user_by_account(self, account_id: str):
         with self.db.cursor() as cur:
