@@ -17,13 +17,13 @@ def admin_get_document(doc_pk: int):
     return doc_service.get_by_id(doc_pk)
 
 # 문서 완전 삭제 API
-@router.delete("/documents/{doc_id}")
-def admin_delete_document(doc_id: str):
+@router.delete("/documents/{doc_pk}")
+def admin_delete_document(doc_pk: str):
     """
     관리자 문서 삭제(파일 + 벡터DB + SQL 삭제 마킹)
     """
     # 1) 문서 메타데이터 존재 확인
-    doc = doc_service.get(doc_id)
+    doc = doc_service.get_by_id(doc_pk)
     if not doc:
         raise HTTPException(404, "해당 문서를 찾을 수 없습니다.")
 
@@ -31,6 +31,6 @@ def admin_delete_document(doc_id: str):
     cleaner.full_delete(doc)
 
     return {
-        "doc_id": doc_id,
+        "doc_id": doc_pk,
         "message": "문서가 완전히 삭제되었습니다. (파일/벡터DB/DB)"
     }
