@@ -7,7 +7,6 @@ import traceback
 
 from app.services.document.document_service import DocumentService
 from app.services.request.request_service import RequestService
-from app.services.rag.rag_service import RAGService
 from app.core.parser import parse_document
 from app.core.config import get_settings
 
@@ -41,7 +40,7 @@ def process_document(self, file_path: str, metadata: dict):
             doc_id=metadata["doc_id"],
             meta=meta,
         )
-
+        from app.services.rag.rag_service import RAGService
         # 3) 청킹/임베딩
         rag = RAGService()
         rag.index_parsed_paragraphs_sharded(parsed, persist=True)

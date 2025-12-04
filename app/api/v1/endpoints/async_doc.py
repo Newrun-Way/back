@@ -7,7 +7,6 @@ from celery.result import AsyncResult
 
 from app.core.config import get_settings
 from app.core.celery_app import celery_app
-from app.tasks.rag_tasks import process_document
 from app.services.document.document_service import DocumentService
 from app.services.rag.pipeline import RAGPipeline
 from pydantic import BaseModel
