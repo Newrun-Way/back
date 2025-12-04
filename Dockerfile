@@ -48,13 +48,25 @@ CMD ["celery", "-A", "app.core.celery_app.celery_app", "worker", "-l", "info"]
 # ===========================================================
 FROM python:3.11-slim-bookworm AS flower
 
-# Flower ONLY needs Celery + Flower + Redis client
+WORKDIR /app
+
+# 1. 라이브러리 설치
+# - celery, flower, redis: Flower 구동 필수
+# - pydantic-settings: config.py(Settings 클래스) 로드용 필수
 RUN pip install --no-cache-dir \
       celery \
       flower \
-      redis
+      redis \
+      pydantic-settings
 
-WORKDIR /app
+# 2. 소스 코드 복사
+# - Celery가 설정을 읽을 때 app/core/celery_app.py -> config.py 순으로 참조하므로 코드가 필요합니다.
+COPY ./app /app/app
+
+# 3. 환경 변수 설정
+# - /app 경로를 파이썬 라이브러리 경로에 포함시켜 'app.core...' 모듈을 찾게 합니다.
+ENV PYTHONPATH=/app
+
 EXPOSE 5555
 
 CMD ["celery", "flower", "--port=5555"]
