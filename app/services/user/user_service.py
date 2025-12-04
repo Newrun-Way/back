@@ -84,3 +84,26 @@ class UserService:
             )
             self.db.commit()
         return {"message": "User deactivated", "user_id": user_id}
+
+    import bcrypt
+
+    def update_password(self, user_id: int, old_pw: str, new_pw: str):
+        user = self.get_by_id(user_id)
+        if not user:
+            return None
+
+        # 기존 PW 검증
+        if not bcrypt.checkpw(old_pw.encode("utf-8"), user["password"].encode("utf-8")):
+            return False
+
+        # 새 PW 저장
+        hashed = bcrypt.hashpw(new_pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+        with self.db.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET password=%s, updated_at=NOW() WHERE id=%s",
+                (hashed, user_id)
+            )
+            self.db.commit()
+
+        return True

@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     HWPLIB_JAR: str | None = None
 
+    JWT_SECRET_KEY: str = "my_super_secret_key_123456789!@#$%^&*"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60 * 24
+
     #MySQL 연결
     DB_HOST: str = "127.0.0.1"
     DB_PORT: int = 3306
