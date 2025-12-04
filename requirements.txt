@@ -15,6 +15,7 @@ pymysql
 
 pydantic==2.5.0
 python-jose[cryptography]==3.3.0
+bcrypt>=4.0.1
 passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 redis==5.0.1
@@ -22,4 +23,3 @@ celery==5.3.4
 flower
 aiofiles==23.2.1
 sse-starlette
-passlib[bcrypt]

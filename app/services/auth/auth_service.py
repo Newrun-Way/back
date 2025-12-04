@@ -2,7 +2,11 @@ from app.core.db import get_connection
 from datetime import datetime
 from passlib.context import CryptContext
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    bcrypt__ident="2b",
+    deprecated="auto",
+)
 
 class AuthService:
     def __init__(self):
