@@ -22,4 +22,4 @@ celery==5.3.4
 flower
 aiofiles==23.2.1
 sse-starlette
-
+passlib[bcrypt]
