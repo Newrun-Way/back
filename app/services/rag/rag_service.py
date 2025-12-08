@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 class RAGService:
     """
-    - 단일 인덱스 혹은 샤드(Shard) 인덱스 운영
-    - 파싱결과(parsed["paragraphs"], parsed["metadata"])를 받아 청킹→임베딩→저장
+    - 단일 인덱스 운영
+    - 파싱결과(parsed)를 받아 청킹→임베딩→저장
     - 질의 시 단일/샤드에 맞게 검색하며, 필요 시 ACL 컨텍스트(user_id/depts/projects)를 사용
     """
 
@@ -91,6 +91,7 @@ class RAGService:
         """
         dirpath.mkdir(parents=True, exist_ok=True)
         store.save(dirpath)
+
     # ---------------------------------------------------------------------
     # 샤드 키 규칙/레지스트리
     # ---------------------------------------------------------------------
@@ -115,30 +116,92 @@ class RAGService:
     # ---------------------------------------------------------------------
     # Indexing (단일/샤드)
     # ---------------------------------------------------------------------
+    def _build_full_text_from_parsed(self, parsed: Dict) -> str:
+        """
+        parser.py에서 만든 parsed JSON에서 문서 전체 텍스트를 복원.
+        (analyze_document_structure에서 사용한 것과 동일한 방식이어야 함)
+        """
+        texts: List[str] = []
+        tc = parsed.get("text_content")
+        if isinstance(tc, list):
+            texts.extend([t for t in tc if isinstance(t, str)])
+        elif isinstance(tc, str):
+            texts.append(tc)
+
+        full_text = "\n".join(texts).strip()
+        return full_text
+
     def index_parsed_paragraphs(self, parsed: Dict, *, persist: bool = True) -> Dict:
+        """
+        단일 인덱스용 인덱싱.
+        doc_structure가 있으면 구조 기반 청킹 + 인덱싱,
+        없으면 기존 paragraph 기반 일반 청킹.
+        """
         meta = parsed.get("metadata", {}) or {}
-        docs = []
-        for i, text in enumerate(_iter_paragraph_texts(parsed)):
-            m = dict(meta); m["paragraph_idx"] = i
-            if not text.strip():
-                continue
-            docs.extend(self.chunker.chunk_text(text, metadata=m))
+        structure = parsed.get("structure")
+
+        docs: List = []
+
+        if structure:
+            # 문서 전체 기반 구조 청킹
+            full_text = self._build_full_text_from_parsed(parsed)
+            if full_text:
+                logger.info("RAGService.index_parsed_paragraphs: 구조 기반 청킹 사용")
+                docs = self.chunker.chunk_text_with_structure(
+                    full_text,
+                    structure,
+                    metadata=meta,
+                )
+        else:
+            # fallback: 기존 paragraph 기반 일반 청킹
+            logger.info("RAGService.index_parsed_paragraphs: 일반 청킹 fallback 사용")
+            for i, text in enumerate(_iter_paragraph_texts(parsed)):
+                if not text.strip():
+                    continue
+                m = dict(meta)
+                m["paragraph_idx"] = i
+                docs.extend(self.chunker.chunk_text(text, metadata=m))
+
         if not docs:
             return {"indexed": 0}
+
         embs = self.embedder.embed_texts([d.page_content for d in docs]).astype(np.float32)
         self.vector_store.add_documents(docs, embs)
-        if persist: self._save_store(self.vector_store, self.vector_dir)
+
+        if persist:
+            self._save_store(self.vector_store, self.vector_dir)
+
         return {"indexed": len(docs)}
-    
+
     def index_parsed_paragraphs_sharded(self, parsed: Dict, *, persist: bool = True) -> Dict:
-        #샤딩 제거 -> 글로벌 인덱싱만 수행
+        """
+        샤딩 제거 → 글로벌 인덱싱만 수행.
+        doc_structure가 있으면 구조 기반 청킹,
+        없으면 기존 paragraph 기반 일반 청킹.
+        """
         meta = parsed.get("metadata", {}) or {}
-        docs = []
-        for i, text in enumerate(_iter_paragraph_texts(parsed)):
-            m = dict(meta); m["paragraph_idx"] = i
-            if not text.strip():
-                continue
-            docs.extend(self.chunker.chunk_text(text, metadata=m))
+        structure = parsed.get("structure")
+
+        docs: List = []
+
+        if structure:
+            full_text = self._build_full_text_from_parsed(parsed)
+            if full_text:
+                logger.info("RAGService.index_parsed_paragraphs_sharded: 구조 기반 청킹 사용")
+                docs = self.chunker.chunk_text_with_structure(
+                    full_text,
+                    structure,
+                    metadata=meta,
+                )
+        else:
+            logger.info("RAGService.index_parsed_paragraphs_sharded: 일반 청킹 fallback 사용")
+            for i, text in enumerate(_iter_paragraph_texts(parsed)):
+                if not text.strip():
+                    continue
+                m = dict(meta)
+                m["paragraph_idx"] = i
+                docs.extend(self.chunker.chunk_text(text, metadata=m))
+
         if not docs:
             return {"indexed": 0, "shards": []}
 
@@ -150,6 +213,7 @@ class RAGService:
             self._save_store(global_store, self.vector_dir)
 
         return {"indexed": len(docs), "shards": ["global"]}
+
     # ---------------------------------------------------------------------
     # Query (단일/샤드)
     # ---------------------------------------------------------------------
@@ -162,6 +226,9 @@ class RAGService:
           "projects": [1, 5, 7],
           "collab_projects": [3, 9]
         }
+
+        반환: ACL 필터링된 검색 결과 리스트
+        각 항목에는 hierarchy_path, chapter/article 메타데이터 포함
         """
         k = top_k or getattr(self.settings, "TOP_K", 5)
         threshold = getattr(self.settings, "SIMILARITY_THRESHOLD", 0.7)
@@ -177,6 +244,11 @@ class RAGService:
                 authorized.append({
                     "content": doc.page_content,
                     "score": float(dist),
+                    "hierarchy_path": meta.get("hierarchy_path"),
+                    "chapter_num": meta.get("chapter_num"),
+                    "chapter_title": meta.get("chapter_title"),
+                    "article_num": meta.get("article_num"),
+                    "article_title": meta.get("article_title"),
                     "metadata": meta,
                 })
 
@@ -187,6 +259,10 @@ class RAGService:
 
     def _has_access(self, user, meta):
         # SUPER_ADMIN → 모든 문서 접근 가능
+        if not user:
+            # 필요 시 anonymous 정책 조정 가능
+            return False
+
         if user["role"] == "SUPER_ADMIN":
             return True
 
@@ -223,16 +299,17 @@ class RAGService:
             out.append((shard, doc, -neg))
         out.reverse()
         return out
-    
 
-    # --- 새 유틸: 문단 보정기 -----------------------------------------------
+
+# --- 문단 보정기 ----------------------------------------------------------
 import re
+
 
 def _iter_paragraph_texts(parsed: dict):
     """
     paragraphs가 비면 text_content / text를 사용해 문단을 생성한다.
     - \n\n(빈 줄) 기준 1차 분해, 그래도 없으면 \n 기준 분해
-    - 공백/번호(\n1, \n2 ...)는 그대로 텍스트로 취급 (청킹이 처리)
+    - 구조 기반 모드는 사용하지 않을 때만 fallback용으로 사용
     """
     # 1) 이미 paragraphs가 있으면 그대로 사용
     paras = parsed.get("paragraphs") or []
