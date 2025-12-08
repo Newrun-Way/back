@@ -304,7 +304,80 @@ def parse_document(file_path: str, *, doc_id: str | None = None, meta: dict | No
 
     doc_structure = analyze_document_structure(text_lines)
     result["structure"] = doc_structure
+    result["structure_tree"] = build_structure_tree(doc_structure)
 
     end_time = time.time()
     logger.info(f"Finished document parsing for {file_path} in {end_time - start_time:.2f} seconds")
     return result
+
+def build_structure_tree(doc_structure: dict) -> dict:
+    """
+    parser.analyze_document_structure()가 만든 구조 정보를 기반으로
+    chapter → article → paragraph 트리 구조를 생성한다.
+
+    Input: doc_structure = {
+        "chapters": [...],
+        "articles": [...],
+        "structure_map": {...}
+    }
+
+    Output: {
+      "chapters": [
+        {
+          "number": "1",
+          "title": "총칙",
+          "articles": [
+            {
+              "number": "1",
+              "title": "",
+              "paragraphs": [
+                {"number": "1", "line_idx": 130},
+                ...
+              ]
+            }
+          ]
+        }
+      ]
+    }
+    """
+    if not doc_structure:
+        return {"chapters": []}
+
+    chapters = doc_structure.get("chapters", [])
+    articles = doc_structure.get("articles", [])
+
+    # 1️⃣ chapter_num → chapter object 매핑
+    chapter_map = {ch.get("number"): ch for ch in chapters}
+
+    # 2️⃣ tree 기본 구조 생성
+    tree = {"chapters": []}
+
+    # chapter 기반 구조 생성
+    for ch in chapters:
+        tree["chapters"].append({
+            "number": ch.get("number"),
+            "title": ch.get("title"),
+            "articles": [],  # 나중에 채움
+        })
+
+    # chapter number → tree chapter object 매핑
+    chapter_tree_map = {c["number"]: c for c in tree["chapters"]}
+
+    # 3️⃣ article → paragraph 매핑 후 chapter에 삽입
+    for art in articles:
+        chapter_num = art.get("chapter_num")
+        if not chapter_num:
+            continue  # chapter 없는 조는 드물지만 방어 처리
+
+        chapter_node = chapter_tree_map.get(chapter_num)
+        if not chapter_node:
+            continue
+
+        article_node = {
+            "number": art.get("number"),
+            "title": art.get("title"),
+            "paragraphs": art.get("paragraphs", []),
+        }
+        chapter_node["articles"].append(article_node)
+
+    return tree
