@@ -1,211 +1,204 @@
+# app/services/rag/chunker.py
+from __future__ import annotations
+from typing import List, Dict, Optional
 
-
-from typing import List, Dict
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from loguru import logger
 
+from app.core.config import get_settings
+from app.services.rag.structure_chunker import StructureAwareChunker
+
 
 class DocumentChunker:
-    """문서 청킹 클래스"""
-    
+    """
+    백엔드 공용 청킹 클래스
+
+    - 일반 청킹: RecursiveCharacterTextSplitter 사용
+    - 구조 청킹: StructureAwareChunker 사용 (문서 전체 + doc_structure 기반)
+    """
+
     def __init__(
         self,
-        chunk_size: int = 800,
-        chunk_overlap: int = 150,
-        separators: List[str] = None
+        chunk_size: int | None = None,
+        chunk_overlap: int | None = None,
+        separators: Optional[List[str]] = None,
     ):
-        """
-        Args:
-            chunk_size: 청크 크기 (토큰)
-            chunk_overlap: 청크 간 겹침 (토큰)
-            separators: 구분자 리스트
-        """
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
-        self.separators = separators or ["\n\n", "\n", ".", "!", "?", " ", ""]
-        
+        settings = get_settings()
+
+        self.chunk_size = chunk_size or getattr(settings, "CHUNK_SIZE", 800)
+        self.chunk_overlap = chunk_overlap or getattr(settings, "CHUNK_OVERLAP", 150)
+        self.separators = separators or getattr(
+            settings,
+            "SEPARATORS",
+            ["\n\n", "\n", ".", "!", "?", " ", ""],
+        )
+
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
             separators=self.separators,
             length_function=len,
         )
-        
-        logger.info(f"DocumentChunker 초기화: chunk_size={chunk_size}, overlap={chunk_overlap}")
-    
+
+        # 구조 기반 청커
+        self.structure_chunker = StructureAwareChunker(
+            max_chunk_size=self.chunk_size,
+            min_chunk_size=max(100, int(self.chunk_size * 0.25)),
+            overlap_size=self.chunk_overlap,
+        )
+
+        logger.info(
+            f"DocumentChunker 초기화: size={self.chunk_size}, overlap={self.chunk_overlap}"
+        )
+
+    # ------------------------------------------------------------------
+    # 일반 청킹 (구조 정보 없는 경우)
+    # ------------------------------------------------------------------
     def chunk_text(
         self,
         text: str,
-        metadata: Dict = None
+        metadata: Dict | None = None
     ) -> List[Document]:
         """
-        텍스트를 청크로 분할
-        
-        Args:
-            text: 입력 텍스트
-            metadata: 메타데이터 (문서명, 섹션 등)
-        
-        Returns:
-            Document 리스트
+        일반 텍스트 청킹 (구조 정보 없음)
         """
         if not text or not text.strip():
-            logger.warning("빈 텍스트 입력")
+            logger.warning("DocumentChunker.chunk_text: 빈 텍스트 입력")
             return []
-        
-        # 메타데이터 기본값
-        if metadata is None:
-            metadata = {}
-        
-        # 청크 생성
-        chunks = self.text_splitter.create_documents(
+
+        metadata = metadata or {}
+
+        docs = self.text_splitter.create_documents(
             texts=[text],
-            metadatas=[metadata]
+            metadatas=[metadata],
         )
-        
-        # 청크 ID 추가
-        for i, chunk in enumerate(chunks):
-            chunk.metadata['chunk_id'] = i
-            chunk.metadata['chunk_size'] = len(chunk.page_content)
-        
-        logger.info(f"텍스트 청킹 완료: {len(chunks)}개 청크 생성")
-        return chunks
-    
-    def chunk_documents(
+
+        for idx, ch in enumerate(docs):
+            ch.metadata["chunk_id"] = idx
+            ch.metadata["chunk_size"] = len(ch.page_content)
+            ch.metadata.setdefault("chunking_strategy", "general")
+
+        logger.info(f"일반 청킹 완료: {len(docs)}개 생성")
+        return docs
+
+    # ------------------------------------------------------------------
+    # 구조 기반 청킹 (문서 전체 + doc_structure)
+    # ------------------------------------------------------------------
+    def chunk_text_with_structure(
         self,
-        documents: List[Dict]
+        full_text: str,
+        doc_structure: Dict,
+        metadata: Dict | None = None
     ) -> List[Document]:
         """
-        여러 문서를 청크로 분할
-        
-        Args:
-            documents: 문서 리스트 [{"text": str, "metadata": dict}, ...]
-        
-        Returns:
-            Document 리스트
+        parser.py에서 생성된 doc_structure를 사용하는 구조 기반 청킹.
+        (문서 전체 텍스트를 한 번에 받아 처리)
         """
-        all_chunks = []
-        
+        if not full_text or not full_text.strip():
+            logger.warning("DocumentChunker.chunk_text_with_structure: 빈 텍스트 입력")
+            return []
+
+        metadata = metadata or {}
+
+        chunks = self.structure_chunker.chunk_by_structure(
+            full_text,
+            doc_structure,
+            metadata,
+        )
+
+        # chunk_id / chunk_size 보정
+        for idx, ch in enumerate(chunks):
+            ch.metadata["chunk_id"] = idx
+            ch.metadata["chunk_size"] = len(ch.page_content)
+            ch.metadata.setdefault("chunking_strategy", "structure")
+
+        logger.info(f"구조 기반 청킹 완료: {len(chunks)}개 생성")
+        return chunks
+
+    # ------------------------------------------------------------------
+    # 여러 문서 청킹 (현재는 일반 청킹 기준)
+    # ------------------------------------------------------------------
+    def chunk_documents(self, documents: List[Dict]) -> List[Document]:
+        """
+        여러 문서를 일반 청킹으로 분할
+        Args: [{"text": str, "metadata": dict}, ...]
+        """
+        all_chunks: List[Document] = []
+
         for doc_idx, doc in enumerate(documents):
             text = doc.get("text", "")
-            metadata = doc.get("metadata", {})
-            metadata['doc_idx'] = doc_idx
-            
+            metadata = doc.get("metadata", {}) or {}
+            metadata["doc_idx"] = doc_idx
+
             chunks = self.chunk_text(text, metadata)
             all_chunks.extend(chunks)
-        
-        logger.info(f"전체 문서 청킹 완료: {len(documents)}개 문서 → {len(all_chunks)}개 청크")
+
+        logger.info(
+            f"전체 문서 청킹 완료: {len(documents)}개 문서 → {len(all_chunks)}개 청크"
+        )
         return all_chunks
-    
+
+    # ------------------------------------------------------------------
+    # 텍스트 + 표 청킹
+    # ------------------------------------------------------------------
     def chunk_with_tables(
         self,
         text: str,
         tables: List[Dict],
-        metadata: Dict = None
+        metadata: Dict | None = None
     ) -> List[Document]:
         """
-        텍스트와 표를 함께 청크로 분할
-        표는 별도 청크로 생성
-        
-        Args:
-            text: 입력 텍스트
-            tables: 표 리스트 [{"summary": str, "rows": [[str]], ...}, ...]
-            metadata: 메타데이터
-        
-        Returns:
-            Document 리스트
+        텍스트는 청킹(구조/일반), 표는 별도 청크로 생성
+        현재는 내부에서 일반 chunk_text를 사용.
         """
-        if metadata is None:
-            metadata = {}
-        
-        chunks = []
-        
-        # 1. 일반 텍스트 청킹
+        metadata = metadata or {}
+        chunks: List[Document] = []
+
+        # 1) 텍스트
         text_chunks = self.chunk_text(text, metadata)
         chunks.extend(text_chunks)
-        
-        # 2. 표 청킹 (각 표는 별도 청크)
-        for table_idx, table in enumerate(tables):
+
+        # 2) 표 처리 (각 표는 별도 청크)
+        for t_idx, table in enumerate(tables):
             table_content = self._format_table(table)
-            table_metadata = metadata.copy()
-            table_metadata['type'] = 'table'
-            table_metadata['table_idx'] = table_idx
-            table_metadata['table_summary'] = table.get('summary', '')
-            
-            table_doc = Document(
+            t_meta = metadata.copy()
+            t_meta["type"] = "table"
+            t_meta["table_idx"] = t_idx
+            t_meta["table_summary"] = table.get("summary", "")
+            t_meta.setdefault("chunking_strategy", "table")
+
+            t_doc = Document(
                 page_content=table_content,
-                metadata=table_metadata
+                metadata=t_meta,
             )
-            chunks.append(table_doc)
-        
-        logger.info(f"텍스트+표 청킹 완료: 텍스트 {len(text_chunks)}개 + 표 {len(tables)}개")
+            chunks.append(t_doc)
+
+        logger.info(
+            f"텍스트+표 청킹 완료: 텍스트 {len(text_chunks)}개 + 표 {len(tables)}개"
+        )
         return chunks
-    
+
+    # ------------------------------------------------------------------
+    # 내부 util
+    # ------------------------------------------------------------------
     def _format_table(self, table: Dict) -> str:
         """
         표를 텍스트 형식으로 변환
-        
-        Args:
-            table: 표 데이터
-        
-        Returns:
-            포맷된 텍스트
         """
-        lines = []
-        
-        # 표 요약
-        if 'summary' in table:
+        lines: List[str] = []
+
+        if "summary" in table:
             lines.append(f"[{table['summary']}]")
             lines.append("")
-        
-        # 표 내용
-        rows = table.get('rows', [])
+
+        rows = table.get("rows", [])
         if rows:
-            # 헤더 (첫 행)
-            if len(rows) > 0:
-                lines.append(" | ".join(rows[0]))
-                lines.append("-" * (len(" | ".join(rows[0]))))
-            
-            # 데이터 행
+            header = " | ".join(rows[0])
+            lines.append(header)
+            lines.append("-" * len(header))
+
             for row in rows[1:]:
                 lines.append(" | ".join(row))
-        
+
         return "\n".join(lines)
-
-
-def test_chunker():
-    """청킹 테스트"""
-    chunker = DocumentChunker(chunk_size=100, chunk_overlap=20)
-    
-    # 테스트 텍스트
-    text = """
-    2024년 디지털정부 발전유공 포상 추진계획
-    
-    1. 목적
-    디지털정부 발전에 기여한 공무원 및 민간인의 노력을 격려하고,
-    우수 사례를 발굴하여 확산하기 위함
-    
-    2. 포상 개요
-    - 대상: 공무원, 민간인
-    - 규모: 총 50명 내외
-    - 시기: 2024년 12월
-    """
-    
-    metadata = {
-        "doc_name": "포상_추진계획.hwpx",
-        "section": "전체"
-    }
-    
-    chunks = chunker.chunk_text(text, metadata)
-    
-    print(f"\n=== 청킹 테스트 결과 ===")
-    print(f"생성된 청크 수: {len(chunks)}")
-    for i, chunk in enumerate(chunks):
-        print(f"\n[청크 {i+1}]")
-        print(f"내용: {chunk.page_content[:100]}...")
-        print(f"메타데이터: {chunk.metadata}")
-
-
-if __name__ == "__main__":
-    test_chunker()
-

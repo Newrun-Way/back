@@ -6,8 +6,118 @@ from pathlib import Path
 from .jpype_setup import init_jpype
 import logging
 import time
-
+import re
 logger = logging.getLogger(__name__)
+
+def analyze_document_structure(text_lines):
+    """
+    문서 텍스트 줄 리스트에서 장/조/항/호 구조 정보를 분석한다.
+    OWPML1 extract.py 구조와 동일한 원형 설계 기반.
+    """
+
+    structure = {
+        "chapters": [],
+        "articles": [],
+        "structure_map": {}
+    }
+
+    current_chapter = None
+    current_article = None
+
+    patterns = {
+        "chapter": re.compile(r'^제\s*(\d+)\s*장\s+(.+)$'),
+        "article": re.compile(r'^제\s*(\d+)\s*조\s*(?:\((.+?)\))?(.*)$'),
+        "paragraph": re.compile(r'^([①②③④⑤⑥⑦⑧⑨⑩]|\d+\))\s*(.*)$'),
+        "subparagraph": re.compile(r'^([가나다라마바사아자차카타파하])\.\s+(.*)$')
+    }
+
+    for line_idx, line in enumerate(text_lines):
+        line = line.strip()
+        if not line:
+            continue
+
+        # 장
+        chapter_match = patterns["chapter"].match(line)
+        if chapter_match:
+            num = chapter_match.group(1)
+            title = chapter_match.group(2).strip()
+
+            current_chapter = {
+                "number": num,
+                "title": title,
+                "line_idx": line_idx,
+                "articles": []
+            }
+            structure["chapters"].append(current_chapter)
+            structure["structure_map"][line_idx] = {
+                "type": "chapter",
+                "number": num,
+                "title": title
+            }
+            continue
+
+        # 조
+        article_match = patterns["article"].match(line)
+        if article_match:
+            num = article_match.group(1)
+            title = article_match.group(2).strip() if article_match.group(2) else ""
+
+            current_article = {
+                "number": num,
+                "title": title,
+                "line_idx": line_idx,
+                "chapter_num": current_chapter["number"] if current_chapter else None,
+                "paragraphs": []
+            }
+
+            if current_chapter:
+                current_chapter["articles"].append(current_article)
+
+            structure["articles"].append(current_article)
+            structure["structure_map"][line_idx] = {
+                "type": "article",
+                "number": num,
+                "title": title,
+                "chapter_num": current_chapter["number"] if current_chapter else None
+            }
+            continue
+
+        # 항
+        para_match = patterns["paragraph"].match(line)
+        if para_match:
+            num = para_match.group(1)
+
+            korean_map = {"①": "1", "②": "2", "③": "3", "④": "4", "⑤": "5",
+                          "⑥": "6", "⑦": "7", "⑧": "8", "⑨": "9", "⑩": "10"}
+            normalized = korean_map.get(num, num.rstrip(")"))
+
+            if current_article:
+                current_article["paragraphs"].append({
+                    "number": normalized,
+                    "line_idx": line_idx
+                })
+
+            structure["structure_map"][line_idx] = {
+                "type": "paragraph",
+                "number": normalized,
+                "article_num": current_article["number"] if current_article else None,
+                "chapter_num": current_chapter["number"] if current_chapter else None
+            }
+            continue
+
+        # 호
+        subpara_match = patterns["subparagraph"].match(line)
+        if subpara_match:
+            letter = subpara_match.group(1)
+
+            structure["structure_map"][line_idx] = {
+                "type": "subparagraph",
+                "letter": letter,
+                "article_num": current_article["number"] if current_article else None,
+                "chapter_num": current_chapter["number"] if current_chapter else None
+            }
+
+    return structure
 
 def extract_hwpx_with_structure(hwpx_path):
     """HWPX 파일에서 구조화된 데이터 추출"""
@@ -182,11 +292,19 @@ def parse_document(file_path: str, *, doc_id: str | None = None, meta: dict | No
         result = extract_hwp_text(hwp_jar_path, file_path)
     
     result["doc_id"] = doc_id or Path(file_path).stem
+
     merged_meta = result.get("metadata", {})
     if meta:
         merged_meta.update(meta)
     result["metadata"] = merged_meta
-    
+
+    # 구조 분석 추가
+    full_text = "\n".join(result["text_content"])
+    text_lines = full_text.split("\n")
+
+    doc_structure = analyze_document_structure(text_lines)
+    result["structure"] = doc_structure
+
     end_time = time.time()
     logger.info(f"Finished document parsing for {file_path} in {end_time - start_time:.2f} seconds")
     return result
