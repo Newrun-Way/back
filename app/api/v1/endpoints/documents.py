@@ -7,12 +7,13 @@ from app.core.config import get_settings
 from app.services.rag.rag_service import RAGService
 from app.services.document.document_service import DocumentService
 from app.services.document.table_service import TableService
-
+from app.services.document.section_builder import SectionBuilder
 import json
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 settings = get_settings()
 doc_service = DocumentService()
+section_builder = SectionBuilder()
 
 GLOBAL_DIR_NAME = "global"
 svc = DocumentService()
