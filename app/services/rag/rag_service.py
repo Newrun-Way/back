@@ -6,20 +6,38 @@ from typing import List, Dict, Tuple, Optional
 import numpy as np
 import logging
 import threading
-import heapq
 
 from app.core.config import get_settings
 from app.core.embedder_singleton import GLOBAL_EMBEDDER
 from app.services.rag.vector_store import VectorStore
 from app.services.rag.chunker import DocumentChunker
+from app.services.rag.reranker import DocumentReranker  # ⬅️ 신규
 
 logger = logging.getLogger(__name__)
 
 
+def _iter_paragraph_texts(parsed: Dict):
+    """
+    parsed dict에서 paragraphs → text_content 순으로 텍스트를 꺼내는 헬퍼.
+    OWPML1 extract 구조와 호환.
+    """
+    paragraphs = parsed.get("paragraphs") or []
+    if paragraphs:
+        for p in paragraphs:
+            text = p.get("text") if isinstance(p, dict) else None
+            if text:
+                yield text
+    else:
+        texts = parsed.get("text_content") or []
+        for t in texts:
+            if isinstance(t, str) and t.strip():
+                yield t
+
+
 class RAGService:
     """
-    - 단일 인덱스 운영
-    - 파싱결과(parsed)를 받아 청킹→임베딩→저장
+    - 단일 인덱스 혹은 샤드(Shard) 인덱스 운영
+    - 파싱결과(parsed["paragraphs"], parsed["metadata"])를 받아 청킹→임베딩→저장
     - 질의 시 단일/샤드에 맞게 검색하며, 필요 시 ACL 컨텍스트(user_id/depts/projects)를 사용
     """
 
@@ -34,15 +52,50 @@ class RAGService:
         self.settings = settings or get_settings()
 
         # 구성요소
-        self.embedder = GLOBAL_EMBEDDER
+        self.embedder = embedder or GLOBAL_EMBEDDER(
+            model_name=getattr(self.settings, "EMBEDDING_MODEL", "BAAI/bge-m3"),
+            device=getattr(self.settings, "EMBEDDING_DEVICE", "cpu"),
+        )
 
         self.chunker = chunker or DocumentChunker(
             chunk_size=getattr(self.settings, "CHUNK_SIZE", 800),
             chunk_overlap=getattr(self.settings, "CHUNK_OVERLAP", 150),
         )
 
+        # 🔹 Reranker 설정
+        self.use_reranker: bool = bool(
+            getattr(self.settings, "USE_RERANKER", False)
+        )
+        self.reranker: Optional[DocumentReranker] = None
+        if self.use_reranker:
+            try:
+                reranker_device = getattr(
+                    self.settings,
+                    "RERANKER_DEVICE",
+                    getattr(self.settings, "EMBEDDING_DEVICE", "cpu"),
+                )
+                self.reranker = DocumentReranker(
+                    model_name=getattr(
+                        self.settings,
+                        "RERANKER_MODEL",
+                        "BAAI/bge-reranker-v2-m3",
+                    ),
+                    device=reranker_device,
+                )
+                logger.info(
+                    "DocumentReranker 활성화: model=%s, device=%s",
+                    self.reranker.model_name,
+                    reranker_device,
+                )
+            except Exception as e:
+                logger.error(f"Reranker 초기화 실패, 비활성화합니다: {e}")
+                self.reranker = None
+                self.use_reranker = False
+
         # 공통 설정
-        self.vector_dir = Path(getattr(self.settings, "VECTOR_STORE_DIR", "data/vector_store"))
+        self.vector_dir = Path(
+            getattr(self.settings, "VECTOR_STORE_DIR", "data/vector_store")
+        )
         print(f"RAG서비스 vector_dir: {self.vector_dir}")
         self.index_type = getattr(self.settings, "VECTOR_STORE_INDEX_TYPE", "flat")
         self.sharding_enabled = False
@@ -74,14 +127,16 @@ class RAGService:
 
         except Exception as e:
             # 2. 로드 실패 시 (새로 생성)
-            logger.warning(f"VectorStore 로드 실패({e}). 새 ChromaDB 저장소를 생성합니다: {dirpath}")
+            logger.warning(
+                f"VectorStore 로드 실패({e}). 새 ChromaDB 저장소를 생성합니다: {dirpath}"
+            )
 
             # ✅ ChromaDB 생성자 호출 (persist_dir 사용)
             return VectorStore(
                 persist_dir=dirpath,
                 # 아래 인자들은 호환용 VectorStore에서 경고 로그만 남기고 무시되므로 유지해도 괜찮습니다.
                 embedding_dim=self.embedder.embedding_dim,
-                index_type=self.index_type
+                index_type=self.index_type,
             )
 
     def _save_store(self, store: VectorStore, dirpath: Path):
@@ -100,7 +155,9 @@ class RAGService:
         return ["global"]
 
     @staticmethod
-    def _shard_keys_for_query(user_id: Optional[str], depts: List[str], projects: List[str]) -> List[str]:
+    def _shard_keys_for_query(
+        user_id: Optional[str], depts: List[str], projects: List[str]
+    ) -> List[str]:
         return ["global"]
 
     def _open_shard(self, shard_key: str) -> VectorStore:
@@ -114,98 +171,58 @@ class RAGService:
                 self._save_store(store, self.vector_dir / shard_key)
 
     # ---------------------------------------------------------------------
-    # Indexing (단일/샤드)
+    # Index API
     # ---------------------------------------------------------------------
-    def _build_full_text_from_parsed(self, parsed: Dict) -> str:
+    def index_parsed_paragraphs(
+        self,
+        parsed: Dict,
+        *,
+        persist: bool = True,
+    ) -> Dict:
         """
-        parser.py에서 만든 parsed JSON에서 문서 전체 텍스트를 복원.
-        (analyze_document_structure에서 사용한 것과 동일한 방식이어야 함)
-        """
-        texts: List[str] = []
-        tc = parsed.get("text_content")
-        if isinstance(tc, list):
-            texts.extend([t for t in tc if isinstance(t, str)])
-        elif isinstance(tc, str):
-            texts.append(tc)
-
-        full_text = "\n".join(texts).strip()
-        return full_text
-
-    def index_parsed_paragraphs(self, parsed: Dict, *, persist: bool = True) -> Dict:
-        """
-        단일 인덱스용 인덱싱.
-        doc_structure가 있으면 구조 기반 청킹 + 인덱싱,
-        없으면 기존 paragraph 기반 일반 청킹.
+        단일(global) 인덱스에 파싱 결과를 색인
         """
         meta = parsed.get("metadata", {}) or {}
-        structure = parsed.get("structure")
-
-        docs: List = []
-
-        if structure:
-            # 문서 전체 기반 구조 청킹
-            full_text = self._build_full_text_from_parsed(parsed)
-            if full_text:
-                logger.info("RAGService.index_parsed_paragraphs: 구조 기반 청킹 사용")
-                docs = self.chunker.chunk_text_with_structure(
-                    full_text,
-                    structure,
-                    metadata=meta,
-                )
-        else:
-            # fallback: 기존 paragraph 기반 일반 청킹
-            logger.info("RAGService.index_parsed_paragraphs: 일반 청킹 fallback 사용")
-            for i, text in enumerate(_iter_paragraph_texts(parsed)):
-                if not text.strip():
-                    continue
-                m = dict(meta)
-                m["paragraph_idx"] = i
-                docs.extend(self.chunker.chunk_text(text, metadata=m))
-
+        docs = []
+        for i, text in enumerate(_iter_paragraph_texts(parsed)):
+            m = dict(meta)
+            m["paragraph_idx"] = i
+            if not text.strip():
+                continue
+            docs.extend(self.chunker.chunk_text(text, metadata=m))
         if not docs:
             return {"indexed": 0}
-
-        embs = self.embedder.embed_texts([d.page_content for d in docs]).astype(np.float32)
+        embs = self.embedder.embed_texts(
+            [d.page_content for d in docs]
+        ).astype(np.float32)
         self.vector_store.add_documents(docs, embs)
-
         if persist:
             self._save_store(self.vector_store, self.vector_dir)
-
         return {"indexed": len(docs)}
 
-    def index_parsed_paragraphs_sharded(self, parsed: Dict, *, persist: bool = True) -> Dict:
+    def index_parsed_paragraphs_sharded(
+        self,
+        parsed: Dict,
+        *,
+        persist: bool = True,
+    ) -> Dict:
         """
-        샤딩 제거 → 글로벌 인덱싱만 수행.
-        doc_structure가 있으면 구조 기반 청킹,
-        없으면 기존 paragraph 기반 일반 청킹.
+        샤딩 제거 → 글로벌 인덱싱만 수행 (인터페이스 유지용)
         """
         meta = parsed.get("metadata", {}) or {}
-        structure = parsed.get("structure")
-
-        docs: List = []
-
-        if structure:
-            full_text = self._build_full_text_from_parsed(parsed)
-            if full_text:
-                logger.info("RAGService.index_parsed_paragraphs_sharded: 구조 기반 청킹 사용")
-                docs = self.chunker.chunk_text_with_structure(
-                    full_text,
-                    structure,
-                    metadata=meta,
-                )
-        else:
-            logger.info("RAGService.index_parsed_paragraphs_sharded: 일반 청킹 fallback 사용")
-            for i, text in enumerate(_iter_paragraph_texts(parsed)):
-                if not text.strip():
-                    continue
-                m = dict(meta)
-                m["paragraph_idx"] = i
-                docs.extend(self.chunker.chunk_text(text, metadata=m))
-
+        docs = []
+        for i, text in enumerate(_iter_paragraph_texts(parsed)):
+            m = dict(meta)
+            m["paragraph_idx"] = i
+            if not text.strip():
+                continue
+            docs.extend(self.chunker.chunk_text(text, metadata=m))
         if not docs:
             return {"indexed": 0, "shards": []}
 
-        embs = self.embedder.embed_texts([d.page_content for d in docs]).astype(np.float32)
+        embs = self.embedder.embed_texts(
+            [d.page_content for d in docs]
+        ).astype(np.float32)
         global_store = self.vector_store
         global_store.add_documents(docs, embs)
 
@@ -215,9 +232,15 @@ class RAGService:
         return {"indexed": len(docs), "shards": ["global"]}
 
     # ---------------------------------------------------------------------
-    # Query (단일/샤드)
+    # Query (Reranker 통합)
     # ---------------------------------------------------------------------
-    def query(self, question: str, top_k: Optional[int] = None, *, user=None):
+    def query(
+        self,
+        question: str,
+        top_k: Optional[int] = None,
+        *,
+        user=None,
+    ):
         """
         user: {
           "id": 1,
@@ -226,48 +249,81 @@ class RAGService:
           "projects": [1, 5, 7],
           "collab_projects": [3, 9]
         }
-
-        반환: ACL 필터링된 검색 결과 리스트
-        각 항목에는 hierarchy_path, chapter/article 메타데이터 포함
         """
         k = top_k or getattr(self.settings, "TOP_K", 5)
         threshold = getattr(self.settings, "SIMILARITY_THRESHOLD", 0.7)
 
         q_vec = self.embedder.embed_query(question).astype(np.float32)
-        results = self.vector_store.search(q_vec, top_k=k * 3, threshold=threshold)
+        # 1차: 벡터 검색 (약간 여유 있게 가져오기)
+        base_top_k = k * 3
+        results: List[Tuple[object, float]] = self.vector_store.search(
+            q_vec,
+            top_k=base_top_k,
+            threshold=threshold,
+        )
 
-        authorized = []
+        # ACL 필터링 (Document, score) 튜플 유지
+        acl_filtered: List[Tuple[object, float]] = []
         for doc, dist in results:
             meta = getattr(doc, "metadata", {}) or {}
-
             if self._has_access(user, meta):
-                authorized.append({
-                    "content": doc.page_content,
-                    "score": float(dist),
-                    "hierarchy_path": meta.get("hierarchy_path"),
-                    "chapter_num": meta.get("chapter_num"),
-                    "chapter_title": meta.get("chapter_title"),
-                    "article_num": meta.get("article_num"),
-                    "article_title": meta.get("article_title"),
-                    "metadata": meta,
-                })
+                acl_filtered.append((doc, dist))
 
-            if len(authorized) >= k:
-                break
+        if not acl_filtered:
+            return []
+
+        # 🔹 Reranker 적용 여부
+        if self.use_reranker and self.reranker is not None:
+            rerank_threshold = float(
+                getattr(self.settings, "RERANK_THRESHOLD", 0.0)
+            )
+            rerank_top_k = int(getattr(self.settings, "RERANK_TOP_K", k * 2))
+            final_top_k = int(getattr(self.settings, "FINAL_TOP_K", k))
+
+            # 너무 많이는 안 넘기도록 잘라줌
+            candidates = acl_filtered[:rerank_top_k]
+
+            reranked = self.reranker.rerank_with_threshold(
+                question,
+                candidates,
+                threshold=rerank_threshold,
+                top_k=final_top_k,
+            )
+
+            selected = reranked[:k] if reranked else []
+        else:
+            # Reranker 비활성화 시, 원래 순서대로 상위 k개
+            selected = acl_filtered[:k]
+
+        # 응답 포맷 유지
+        authorized: List[Dict] = []
+        for doc, score in selected:
+            meta = getattr(doc, "metadata", {}) or {}
+            authorized.append(
+                {
+                    "content": doc.page_content,
+                    # 리랭커가 있으면 score=rerank score, 아니면 L2 거리
+                    "score": float(score),
+                    "metadata": meta,
+                }
+            )
 
         return authorized
 
+    # ---------------------------------------------------------------------
+    # ACL
+    # ---------------------------------------------------------------------
     def _has_access(self, user, meta):
-        # SUPER_ADMIN → 모든 문서 접근 가능
+        # user 정보가 없으면 일단 막는다 (필요 시 정책 변경)
         if not user:
-            # 필요 시 anonymous 정책 조정 가능
             return False
 
-        if user["role"] == "SUPER_ADMIN":
+        # SUPER_ADMIN → 모든 문서 접근 가능
+        if user.get("role") == "SUPER_ADMIN":
             return True
 
         # 일반 dept 접근
-        if meta.get("dept_id") == user["dept_id"]:
+        if meta.get("dept_id") == user.get("dept_id"):
             return True
 
         # 사용자가 속한 프로젝트
@@ -275,74 +331,9 @@ class RAGService:
             return True
 
         # 협업 프로젝트
-        if "project_id" in meta and meta["project_id"] in user.get("collab_projects", []):
+        if "project_id" in meta and meta["project_id"] in user.get(
+            "collab_projects", []
+        ):
             return True
 
         return False
-
-    @staticmethod
-    def _merge_results(results_by_shard: Dict[str, List[Tuple[object, float]]], top_k: int) -> List[Tuple[str, object, float]]:
-        """
-        {shard_key: [(doc, dist), ...]} → 거리(dist) 오름차순 상위 top_k 병합
-        """
-        heap = []  # max-heap (-dist, shard, doc)
-        for shard, items in results_by_shard.items():
-            for doc, dist in items:
-                if len(heap) < top_k:
-                    heapq.heappush(heap, (-dist, shard, doc))
-                else:
-                    if dist < -heap[0][0]:
-                        heapq.heapreplace(heap, (-dist, shard, doc))
-        out = []
-        while heap:
-            neg, shard, doc = heapq.heappop(heap)
-            out.append((shard, doc, -neg))
-        out.reverse()
-        return out
-
-
-# --- 문단 보정기 ----------------------------------------------------------
-import re
-
-
-def _iter_paragraph_texts(parsed: dict):
-    """
-    paragraphs가 비면 text_content / text를 사용해 문단을 생성한다.
-    - \n\n(빈 줄) 기준 1차 분해, 그래도 없으면 \n 기준 분해
-    - 구조 기반 모드는 사용하지 않을 때만 fallback용으로 사용
-    """
-    # 1) 이미 paragraphs가 있으면 그대로 사용
-    paras = parsed.get("paragraphs") or []
-    if paras:
-        for p in paras:
-            t = (p.get("text") or "").strip()
-            if t:
-                yield t
-        return
-
-    # 2) 없으면 text_content / text 에서 생성
-    texts = []
-    tc = parsed.get("text_content")
-    if isinstance(tc, list):
-        texts.extend([t for t in tc if isinstance(t, str)])
-    elif isinstance(tc, str):
-        texts.append(tc)
-
-    raw = "\n".join(texts).strip()
-    if not raw:
-        return
-
-    # 빈 줄 2개 이상 기준으로 1차 분해 → 그래도 부족하면 단일 개행으로 보조
-    blocks = re.split(r"\n{2,}", raw)
-    for b in blocks:
-        b = b.strip()
-        if not b:
-            continue
-        # 너무 길게 붙은 경우 줄 개행으로 한 번 더 쪼개기(선택)
-        if "\n" in b and len(b) > 2_000:
-            for seg in re.split(r"\n+", b):
-                seg = seg.strip()
-                if seg:
-                    yield seg
-        else:
-            yield b

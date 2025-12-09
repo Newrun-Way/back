@@ -26,11 +26,9 @@ class Settings(BaseSettings):
     # RAG 설정
     DATA_DIR: str = "/app/app/data"
 
-    #벡터스토어
+    #벡터스토어 (Chroma)
     VECTOR_STORE_DIR: str = "/app/app/data/vector_store"
     VECTOR_STORE_INDEX_TYPE: str = "flat"
-
-    # 샤딩
     SHARDING_ENABLED: bool = False
 
     # 업로드/파싱된 파일
@@ -51,6 +49,16 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gpt-4o-mini"
     LLM_TEMPERATURE: float = 0.7
     LLM_MAX_TOKENS: int = 1024
+
+    # ======================
+    # Reranker 설정
+    # ======================
+    USE_RERANKER: bool = True  # GPU 서버이면 항상 True
+    RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
+    RERANKER_DEVICE: str = "cuda"  # GPU에서 CrossEncoder 실행
+    RERANK_THRESHOLD: float = 0.0  # 점수 필터링 기준 (보통 0)
+    RERANK_TOP_K: int = 15  # 벡터검색 후보 상위 n개만 rerank
+    FINAL_TOP_K: int = 5
 
     CHUNK_SIZE: int = 800
     CHUNK_OVERLAP: int = 150
