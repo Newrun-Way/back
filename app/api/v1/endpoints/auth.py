@@ -23,7 +23,7 @@ class UserOut(BaseModel):
     account_id: str
     user_name: str
     role: Literal["SUPER_ADMIN", "MANAGER", "USER"] | str
-    dept_id: int
+    dept_id: Optional[int] = None
     project_id: Optional[int] = None
     profile_image_path: Optional[str] = None
 
