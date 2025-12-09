@@ -36,6 +36,7 @@ def get_document_detail(doc_pk: int):
         raise HTTPException(404, "문서를 찾을 수 없습니다.")
 
     external_doc_id = doc["external_doc_id"]
+    original_filename = doc["original_filename"]
     print(f"[DEBUG] external_doc_id from DB: {external_doc_id}")
     print(f"[DEBUG] stored_path: {doc['stored_path']}")
     print(f"[DEBUG] status: {doc['status']}")
@@ -70,11 +71,12 @@ def get_document_detail(doc_pk: int):
         return {
             "id": doc_pk,
             "external_doc_id": external_doc_id,
-            "original_filename": doc["original_filename"],
+            "original_filename": original_filename,
             "total_chunks": 0,
             "content": "",
             "summary": None,
             "structure_tree": None,
+            "tables": [],
             "chunks": [],
             "message": f"VectorDB에 external_doc_id={external_doc_id} 로 저장된 chunk가 없습니다.",
         }
@@ -149,16 +151,25 @@ def get_document_detail(doc_pk: int):
                     "summary": None,             # 조 요약 (추후 요약 엔진 연동)
                     "hierarchy_path": hierarchy_path,
                     "body": "",                  # 해당 조 전체 원문
+                    "paragraphs": [],
                     "chunks": [],                # 조에 속한 청크들(옵션)
                 }
 
             art_node = articles_map[art_key]
 
-            # body 누적
+            # 조 본문(body) 누적
             if art_node["body"]:
                 art_node["body"] += "\n" + text
             else:
                 art_node["body"] = text
+
+            # 단순 paragraph 리스트(옵션)로도 보관
+            art_node["paragraphs"].append(
+                {
+                    "number": None,
+                    "text": text,
+                }
+            )
 
             # 조 하위 chunk 목록 (원하면 프론트에서 사용할 수 있음)
             art_node["chunks"].append(
@@ -200,16 +211,22 @@ def get_document_detail(doc_pk: int):
     #    - DB 컬럼 또는 향후 Celery 요약 엔진이 metadata에 넣어줄 수 있음
     doc_summary = doc.get("summary") if isinstance(doc, dict) else None
 
+    # 8) 표 구조 로드
     tables = table_service.get_tables_for_document(original_filename)
-    # 8) 응답
+
+    # 9) section JSON 생성
+    sections = section_builder.build(structure_tree, tables)
+
+    # 10) 응답
     return {
         "id": doc_pk,
         "external_doc_id": external_doc_id,
-        "original_filename": doc["original_filename"],
+        "original_filename": original_filename,
         "total_chunks": len(items),
         "content": merged_text,
         "summary": doc_summary,
         "structure_tree": structure_tree,
+        "sections": sections,
         "tables": tables,
         "chunks": [
             {
