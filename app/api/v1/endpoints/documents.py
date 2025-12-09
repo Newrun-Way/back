@@ -6,6 +6,7 @@ from pathlib import Path
 from app.core.config import get_settings
 from app.services.rag.rag_service import RAGService
 from app.services.document.document_service import DocumentService
+from app.services.document.table_service import TableService
 
 import json
 
@@ -15,6 +16,7 @@ doc_service = DocumentService()
 
 GLOBAL_DIR_NAME = "global"
 svc = DocumentService()
+table_service = TableService()
 
 @router.get("/")
 def list_documents(dept_id: int | None = None, project_id: int | None = None):
@@ -198,6 +200,7 @@ def get_document_detail(doc_pk: int):
     #    - DB 컬럼 또는 향후 Celery 요약 엔진이 metadata에 넣어줄 수 있음
     doc_summary = doc.get("summary") if isinstance(doc, dict) else None
 
+    tables = table_service.get_tables_for_document(original_filename)
     # 8) 응답
     return {
         "id": doc_pk,
@@ -207,6 +210,7 @@ def get_document_detail(doc_pk: int):
         "content": merged_text,
         "summary": doc_summary,
         "structure_tree": structure_tree,
+        "tables": tables,
         "chunks": [
             {
                 "chunk_id": meta.get("chunk_id"),
