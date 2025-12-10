@@ -5,8 +5,9 @@ from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.api.v1.router import api_router as v1_router
 from app.api.v1.endpoints import async_doc
+from fastapi.staticfiles import StaticFiles
 
-from app.services.rag.pipeline import RAGPipeline
+# from app.services.rag.pipeline import RAGPipeline
 import os
 
 settings = get_settings()
@@ -37,6 +38,7 @@ app.add_middleware(
 
 app.include_router(v1_router, prefix="/api/v1")
 app.include_router(async_doc.router)
+app.mount("/static", StaticFiles(directory="app/app/data"), name="static")
 
 
 if __name__ == "__main__":

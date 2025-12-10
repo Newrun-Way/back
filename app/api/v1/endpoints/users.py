@@ -76,11 +76,11 @@ def upload_profile_image(
     save_dir = Path(settings.DATA_DIR) / "profile"
     save_dir.mkdir(parents=True, exist_ok=True)
     save_path = save_dir / f"{user_id}_{file.filename}"
-
+    public_url = f"/static/profile/{user_id}_{file.filename}"
     # 파일 저장
     with open(save_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     # DB 업데이트
-    updated = service.update_user(user_id, {"profile_image_path": str(save_path)})
+    updated = service.update_user(user_id, {"profile_image_path": public_url})
     return {"message": "업로드 성공", "profile_image_path": updated["profile_image_path"]}
