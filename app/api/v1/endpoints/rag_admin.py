@@ -54,3 +54,48 @@ def dump_all_chroma(limit: int = 5000):
         "count": len(dump),
         "items": dump
     }
+
+@router.get("/doc-chunks")
+def get_doc_chunks(external_doc_id: str, limit: int = 1000):
+    """
+    특정 문서(external_doc_id)에 해당하는 chunk들을 직접 조회하는 개발용 API.
+    - 현재 저장된 metadata key가 external_doc_id가 맞는지 확인 가능
+    - 문제가 있다면 어떤 metadata로 저장돼 있는지 한눈에 파악 가능
+    """
+    try:
+        rag = RAGService()
+        col = rag.vector_store.collection
+    except Exception as e:
+        raise HTTPException(500, f"Chroma 로드 실패: {e}")
+
+    # where 필터
+    query_filter = {"external_doc_id": external_doc_id}
+
+    try:
+        result = col.get(
+            where=query_filter,
+            include=["documents", "metadatas"],
+            limit=limit
+        )
+    except Exception as e:
+        raise HTTPException(500, f"VectorStore get() 실패: {e}")
+
+    ids = result.get("ids", [])
+    documents = result.get("documents", [])
+    metadatas = result.get("metadatas", [])
+
+    items = []
+    for i in range(len(ids)):
+        doc_preview = (documents[i][:80].replace("\n", " ") if documents[i] else "")
+        items.append({
+            "id": ids[i],
+            "external_doc_id": metadatas[i].get("external_doc_id"),
+            "metadata": metadatas[i],
+            "preview": doc_preview
+        })
+
+    return {
+        "external_doc_id": external_doc_id,
+        "count": len(items),
+        "items": items
+    }
