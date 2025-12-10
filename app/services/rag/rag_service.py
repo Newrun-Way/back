@@ -203,23 +203,27 @@ class RAGService:
         *,
         persist: bool = True,
     ) -> Dict:
-        """
-        샤딩 제거 → 글로벌 인덱싱만 수행 (인터페이스 유지용)
-        """
         meta = parsed.get("metadata", {}) or {}
+        doc_id = meta.get("doc_id")
+
         docs = []
-        for i, text in enumerate(_iter_paragraph_texts(parsed)):
-            m = dict(meta)
-            m["paragraph_idx"] = i
+        for p_idx, text in enumerate(_iter_paragraph_texts(parsed)):
             if not text.strip():
                 continue
-            docs.extend(self.chunker.chunk_text(text, metadata=m))
+
+            m = dict(meta)
+            m["paragraph_idx"] = p_idx
+            chunks = self.chunker.chunk_text(text, metadata=m)
+
+            for c_idx, chunk in enumerate(chunks):
+                chunk_id = f"{doc_id}-{p_idx}-{c_idx}"
+                chunk.metadata["id"] = chunk_id
+                docs.append(chunk)
+
         if not docs:
             return {"indexed": 0, "shards": []}
 
-        embs = self.embedder.embed_texts(
-            [d.page_content for d in docs]
-        ).astype(np.float32)
+        embs = self.embedder.embed_texts([d.page_content for d in docs]).astype(np.float32)
         global_store = self.vector_store
         global_store.add_documents(docs, embs)
 
