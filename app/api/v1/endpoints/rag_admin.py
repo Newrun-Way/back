@@ -99,3 +99,33 @@ def get_doc_chunks(external_doc_id: str, limit: int = 1000):
         "count": len(items),
         "items": items
     }
+
+@router.get("/debug/by-db/{doc_id}")
+def debug_by_db_id(doc_id: int):
+    rag = RAGService()
+    col = rag.vector_store.collection
+
+    result = col.get(
+        where={"db_id": doc_id},
+        include=["documents", "metadatas"],
+        limit=10000
+    )
+
+    items = []
+    docs = result.get("documents", [])
+    metas = result.get("metadatas", [])
+
+    for i, meta in enumerate(metas):
+        items.append({
+            "idx": i,
+            "chunk_id": meta.get("chunk_id"),
+            "paragraph_idx": meta.get("paragraph_idx"),
+            "db_id": meta.get("db_id"),
+            "external_doc_id": meta.get("external_doc_id"),
+            "preview": docs[i][:80],
+        })
+
+    return {
+        "count": len(items),
+        "items": items
+    }
