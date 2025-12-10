@@ -225,7 +225,8 @@ class RAGService:
 
         embs = self.embedder.embed_texts([d.page_content for d in docs]).astype(np.float32)
         global_store = self.vector_store
-        global_store.add_documents(docs, embs)
+        ids = [d.metadata["id"] for d in docs]
+        global_store.add_documents(docs, embs, ids=ids)
 
         if persist:
             self._save_store(global_store, self.vector_dir)
