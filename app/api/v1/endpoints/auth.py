@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException
+# app/api/v1/endpoints/auth.py
+
+from fastapi import APIRouter, HTTPException, Header, Depends
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 
@@ -13,10 +15,33 @@ from app.core.auth.jwt import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 service = AuthService()
 
+# ============================================================
+#  JWT 기반 인증 Dependency (핵심!)
+# ============================================================
 
-# ============================================
-# Pydantic Models (Swagger Example 포함)
-# ============================================
+def get_current_user(authorization: str = Header(None)):
+    """
+    Authorization: Bearer <token>
+    → decode_token()
+    → DB에서 user 조회
+    → 성공하면 user dict 반환
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Missing or invalid Authorization header")
+
+    token = authorization.split(" ")[1]
+    payload = decode_token(token)
+
+    user = service.get_user_by_id(payload["user_id"])
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    return user
+
+
+# ============================================================
+#  Pydantic Models (Swagger Example 포함)
+# ============================================================
 
 class UserOut(BaseModel):
     id: int
@@ -53,63 +78,7 @@ class SignupResponse(BaseModel):
     message: str
     user: UserOut
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "message": "회원가입 완료",
-                "user": UserOut.Config.json_schema_extra["example"],
-            }
-        }
 
-
-# --- Login ------------------------------------------
-
-class LoginRequest(BaseModel):
-    account_id: str = Field(..., example="user123")
-    password: str = Field(..., example="비밀번호123!")
-
-
-class LoginResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    user: UserOut
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                "refresh_token": "eyJh...",
-                "token_type": "bearer",
-                "user": UserOut.Config.json_schema_extra["example"],
-            }
-        }
-
-
-# --- Token Refresh -----------------------------------
-
-class TokenRefreshRequest(BaseModel):
-    refresh_token: str = Field(..., example="eyJhbGciOiJIUzI1NiIs...")
-
-
-class TokenRefreshResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "access_token": "새로운-access-token",
-                "token_type": "bearer",
-            }
-        }
-
-
-# ============================================
-# 엔드포인트
-# ============================================
-
-# 회원가입
 @router.post("/signup", response_model=SignupResponse, summary="회원가입")
 def signup(payload: SignupRequest):
     exists = service.get_user_by_account(payload.account_id)
@@ -130,25 +99,34 @@ def signup(payload: SignupRequest):
     }
 
 
-# 로그인
+# --- Login ------------------------------------------
+
+class LoginRequest(BaseModel):
+    account_id: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
 @router.post("/login", response_model=LoginResponse, summary="로그인")
 def login(payload: LoginRequest):
-    # 1) 사용자 조회
     user = service.get_user_by_account(payload.account_id)
     if not user:
         raise HTTPException(404, "사용자를 찾을 수 없습니다.")
 
-    # 2) 비밀번호 확인
     if not service.verify_password(payload.password, user["password"]):
         raise HTTPException(401, "비밀번호가 올바르지 않습니다.")
 
-    # 3) JWT 발급
     base_claim = {"user_id": user["id"]}
 
     access_token = create_access_token(base_claim)
     refresh_token = create_refresh_token(base_claim)
 
-    # 4) user 출력 정리
     safe_user = service.to_safe_user(user)
 
     return {
@@ -159,27 +137,34 @@ def login(payload: LoginRequest):
     }
 
 
-# Access Token 재발급
-@router.post("/refresh", response_model=TokenRefreshResponse, summary="Access Token 재발급")
+# --- Token Refresh -----------------------------------
+
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class TokenRefreshResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+@router.post("/refresh", response_model=TokenRefreshResponse)
 def refresh_token(payload: TokenRefreshRequest):
-    decoded = decode_token(payload.refresh_token)
+    token = payload.refresh_token
+    decoded = decode_token(token)
 
     if not is_refresh_token(decoded):
-        raise HTTPException(401, "유효한 Refresh Token이 아닙니다.")
+        raise HTTPException(401, "Refresh token이 아닙니다.")
 
-    user_id = decoded.get("user_id")
-    if not user_id:
-        raise HTTPException(401, "토큰 정보가 유효하지 않습니다.")
+    new_access = create_access_token({"user_id": decoded["user_id"]})
 
-    # 유저 존재 확인 (보안상 추가)
-    user = service.get_user_by_id(user_id)
-    if not user:
-        raise HTTPException(404, "사용자를 찾을 수 없습니다.")
+    return {"access_token": new_access, "token_type": "bearer"}
 
-    # 새 access token 발급
-    new_access = create_access_token({"user_id": user_id})
 
-    return {
-        "access_token": new_access,
-        "token_type": "bearer",
-    }
+# ============================================================
+#  로그인된 유저 세션 확인 (옵션)
+# ============================================================
+
+@router.get("/me", response_model=UserOut, summary="현재 로그인된 유저 정보 조회")
+def auth_me(current_user: dict = Depends(get_current_user)):
+    return service.to_safe_user(current_user)
