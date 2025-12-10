@@ -38,7 +38,7 @@ app.add_middleware(
 
 app.include_router(v1_router, prefix="/api/v1")
 app.include_router(async_doc.router)
-app.mount("/static", StaticFiles(directory="app/app/data"), name="static")
+app.mount("/static", StaticFiles(directory="/app/app/data"), name="static")
 
 
 if __name__ == "__main__":
