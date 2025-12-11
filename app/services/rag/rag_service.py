@@ -203,29 +203,46 @@ class RAGService:
         *,
         persist: bool = True,
     ) -> Dict:
+        """
+        샤딩 제거 → 글로벌 인덱싱만 수행.
+        고유 chunk_id = {doc_id}-{paragraph_idx}-{chunk_idx}
+        """
         meta = parsed.get("metadata", {}) or {}
         doc_id = meta.get("doc_id")
 
-        docs = []
+        docs: List[Document] = []
+        ids: List[str] = []
+
         for p_idx, text in enumerate(_iter_paragraph_texts(parsed)):
             if not text.strip():
                 continue
 
             m = dict(meta)
             m["paragraph_idx"] = p_idx
+
             chunks = self.chunker.chunk_text(text, metadata=m)
 
             for c_idx, chunk in enumerate(chunks):
+                # 고유 ID 부여
                 chunk_id = f"{doc_id}-{p_idx}-{c_idx}"
+
+                # 메타데이터에도 기록
                 chunk.metadata["id"] = chunk_id
+
+                # LangChain Document 객체 유지
                 docs.append(chunk)
+                ids.append(chunk_id)
 
         if not docs:
             return {"indexed": 0, "shards": []}
 
-        embs = self.embedder.embed_texts([d.page_content for d in docs]).astype(np.float32)
+        # 임베딩 생성
+        embs = self.embedder.embed_texts(
+            [d.page_content for d in docs]
+        ).astype(np.float32)
+
+        # ChromaDB에 추가 (🔥 ids 전달)
         global_store = self.vector_store
-        ids = [d.metadata["id"] for d in docs]
         global_store.add_documents(docs, embs, ids=ids)
 
         if persist:

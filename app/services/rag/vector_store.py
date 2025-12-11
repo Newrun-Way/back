@@ -19,25 +19,15 @@ class VectorStore:
             self,
             persist_dir: Path,  # ChromaDB는 저장 경로가 필수
             collection_name: str = "global",
-            embedding_dim: int = None,  # FAISS 호환용 (사용 X)
-            index_type: str = None  # FAISS 호환용 (사용 X)
     ):
         """
         Args:
             persist_dir: DB 저장 디렉토리 (필수)
             collection_name: ChromaDB 컬렉션 이름
-            embedding_dim: (무시됨) FAISS 호환용
-            index_type: (무시됨) FAISS 호환용
         """
         # 1. 경로 설정: 입력받은 경로 하위에 "global" 폴더를 사용하도록 설정
         self.persist_dir = Path(persist_dir) / "global"
         self.persist_dir.mkdir(parents=True, exist_ok=True)
-
-        ## FAISS 호환용 로그 처리
-        # if embedding_dim is not None:
-        #     logger.warning(f"ChromaDB는 'embedding_dim'({embedding_dim}) 인자를 init에서 사용하지 않습니다.")
-        # if index_type is not None:
-        #     logger.warning(f"ChromaDB는 'index_type'('{index_type}') 인자를 init에서 사용하지 않습니다.")
 
         # 2. 클라이언트 초기화
         try:
@@ -62,15 +52,13 @@ class VectorStore:
         )
 
     def add_documents(
-            self,
-            documents: List[Document],
-            embeddings: np.ndarray
+        self,
+        documents: List[Document],
+        embeddings: np.ndarray,
+        ids: Optional[List[str]] = None,
     ):
         """
-        문서와 임베딩을 인덱스에 추가 (FAISS API 호환)
-        Args:
-            documents: Document 리스트
-            embeddings: 임베딩 벡터 배열 (shape: [n, dim])
+        문서와 임베딩을 인덱스에 추가 (ids 제공 시 Chroma의 ID를 직접 지정)
         """
         if len(documents) != len(embeddings):
             raise ValueError("문서 수와 임베딩 수가 일치하지 않습니다")
@@ -79,27 +67,32 @@ class VectorStore:
             logger.warning("추가할 문서가 없습니다.")
             return
 
-        # ChromaDB에 맞는 형식으로 변환
+        # ------------------------------------------------------
+        # 🔥 새로운 ID 사용 방식
+        # ------------------------------------------------------
+        if ids is not None:
+            if len(ids) != len(documents):
+                raise ValueError("ids 길이가 documents 수와 일치하지 않습니다")
+            chroma_ids = ids  # 우리가 정의한 고유 ID 사용
+        else:
+            # 백워드 호환: 기존 자동 증가 ID 방식
+            start_id = self.doc_count
+            chroma_ids = [str(start_id + i) for i in range(len(documents))]
+
         doc_contents = [doc.page_content for doc in documents]
         metadatas = [doc.metadata for doc in documents]
-
-        # ID 생성: 중복 방지를 위해 현재 doc_count 기준 사용
-        start_id = self.doc_count
-        ids = [str(start_id + i) for i in range(len(documents))]
-
-        # 임베딩을 리스트로 변환
         embeddings_list = embeddings.tolist()
 
         try:
             self.collection.add(
-                ids=ids,
+                ids=chroma_ids,
                 embeddings=embeddings_list,
                 documents=doc_contents,
-                metadatas=metadatas
+                metadatas=metadatas,
             )
-        except chromadb.errors.IDAlreadyExistsError:
-            logger.error("ID 중복 오류 발생. 이미 추가된 데이터일 수 있습니다.")
-            return
+        except Exception as e:
+            logger.error(f"ChromaDB add 실패: {e}")
+            raise e
 
         new_total = self.collection.count()
         added_count = new_total - self.doc_count
