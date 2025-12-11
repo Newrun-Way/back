@@ -1,3 +1,4 @@
+#app/core/parser.py
 import zipfile
 import xml.etree.ElementTree as ET
 import json
@@ -120,7 +121,7 @@ def analyze_document_structure(text_lines):
     return structure
 
 def extract_hwpx_with_structure(hwpx_path):
-    """HWPX 파일에서 구조화된 데이터 추출"""
+    """HWPX 파일에서 텍스트 + 표 + 이미지 + RAG 호환 구조 메타를 추출."""
     logger.info(f"Starting HWPX extraction for {hwpx_path}")
     start_time = time.time()
 
@@ -133,85 +134,110 @@ def extract_hwpx_with_structure(hwpx_path):
         "file_type": "HWPX"
     }
 
-    # HWPX는 ZIP 파일
+    # ------------------------------
+    # ZIP 구조 유지 (기존 방식 그대로)
+    # ------------------------------
     with zipfile.ZipFile(hwpx_path, 'r') as z:
-        
-        # 메타데이터 추출
+
+        # 메타데이터
         try:
             header_xml = z.read('Contents/header.xml').decode('utf-8')
             header_root = ET.fromstring(header_xml)
             result["metadata"]["header"] = "추출됨"
-        except:
+        except Exception:
             pass
-        
-        # Section 파일들 처리
-        section_files = [f for f in z.namelist() if f.startswith('Contents/section') and f.endswith('.xml')]
-        
+
+        # 섹션 파일 추출
+        section_files = [
+            f for f in z.namelist()
+            if f.startswith('Contents/section') and f.endswith('.xml')
+        ]
+
         for section_file in section_files:
             section_xml = z.read(section_file).decode('utf-8')
             root = ET.fromstring(section_xml)
-            
-            # 네임스페이스 정의
+
             ns = {
                 'hp': 'http://www.hancom.co.kr/hwpml/2011/paragraph',
                 'hc': 'http://www.hancom.co.kr/hwpml/2011/core'
             }
-            
-            # 텍스트 추출 (단락별)
+
+            # -------------------------------------------------
+            # 🔹 1) 문단(paragraph) 추출 – 기존 기능 그대로
+            # -------------------------------------------------
             paragraphs = root.findall('.//hp:p', ns)
-            for i, para in enumerate(paragraphs):
+            for p_idx, para in enumerate(paragraphs):
                 para_text = ''.join(para.itertext()).strip()
                 if para_text:
                     result["paragraphs"].append({
-                        "id": i,
-                        "text": para_text,
-                        "type": "paragraph"
+                        "id": p_idx,
+                        "type": "paragraph",
+                        "text": para_text
                     })
                     result["text_content"].append(para_text)
-            
-            # 표(Table) 추출
+
+            # -------------------------------------------------
+            # 🔹 2) 표(table) 추출 – RAG 호환 확장
+            # -------------------------------------------------
             tables = root.findall('.//hp:tbl', ns)
+
             for t_idx, table in enumerate(tables):
                 table_data = {
                     "id": t_idx,
+                    "table_id": f"t{t_idx+1:03d}",     # ⭐ RAG 연동 핵심
                     "type": "table",
                     "rows": [],
-                    "summary": ""
+                    "summary": "",
+                    # ⭐ RAG 구조 기반 검색을 위한 placeholder
+                    "chapter_num": None,
+                    "article_num": None,
+                    "hierarchy_path": None
                 }
-                
-                # 표의 각 행(tr) 처리
+
+                # 행(row) 추출
                 rows = table.findall('.//hp:tr', ns)
                 for row in rows:
                     cells = []
-                    # 각 셀(tc) 처리
                     for cell in row.findall('.//hp:tc', ns):
                         cell_text = ''.join(cell.itertext()).strip()
                         cells.append(cell_text)
                     if cells:
                         table_data["rows"].append(cells)
-                
+
+                # summary 생성 및 저장
                 if table_data["rows"]:
-                    # 표 요약 생성
-                    table_data["summary"] = f"표 {t_idx + 1}: {len(table_data['rows'])}행 × {len(table_data['rows'][0])}열"
+                    n_rows = len(table_data["rows"])
+                    n_cols = len(table_data["rows"][0])
+                    table_data["summary"] = f"표 {t_idx+1}: {n_rows}행 × {n_cols}열"
+
                     result["tables"].append(table_data)
-                    
-                    # 텍스트 컨텐츠에도 표시
+
+                    # 텍스트에도 summary 표시(기존 기능 유지)
                     result["text_content"].append(f"\n[{table_data['summary']}]\n")
-        
-        # 이미지 추출 (이미지 데이터는 직접 반환하지 않고, 메타데이터만 포함)
-        image_files = [f for f in z.namelist() if f.startswith('BinData/') and 
-                      any(f.endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.bmp', '.gif'])]
-        
+
+        # -------------------------------------------------
+        # 3) 이미지 처리
+        # -------------------------------------------------
+        image_files = [
+            f for f in z.namelist()
+            if f.startswith('BinData/') and any(
+                f.endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.bmp', '.gif']
+            )
+        ]
+
         for img_file in image_files:
             img_name = os.path.basename(img_file)
             result["images"].append({
                 "filename": img_name,
                 "size": z.getinfo(img_file).file_size
             })
-    
+
     end_time = time.time()
-    logger.info(f"Finished HWPX extraction for {hwpx_path} in {end_time - start_time:.2f} seconds")
+    logger.info(
+        f"Finished HWPX extraction for {hwpx_path} in {end_time - start_time:.2f} seconds"
+    )
     return result
+
 
 
 def extract_hwp_text(hwp_jar_path, hwp_path):
@@ -305,6 +331,49 @@ def parse_document(file_path: str, *, doc_id: str | None = None, meta: dict | No
     doc_structure = analyze_document_structure(text_lines)
     result["structure"] = doc_structure
     result["structure_tree"] = build_structure_tree(doc_structure)
+
+    # -------------------------
+    # 🔥 구조 메타를 paragraph-level에 병합
+    # -------------------------
+    structure_map = doc_structure.get("structure_map", {})
+    paragraphs = result.get("paragraphs", [])
+
+    for p in paragraphs:
+        line_idx = p.get("id")
+        meta = structure_map.get(line_idx, {})
+
+        # chapter
+        if meta.get("type") == "chapter":
+            p["chapter_num"] = meta.get("number")
+            p["chapter_title"] = meta.get("title")
+        else:
+            p["chapter_num"] = meta.get("chapter_num")
+            p["chapter_title"] = None
+
+        # article
+        if meta.get("type") == "article":
+            p["article_num"] = meta.get("number")
+            p["article_title"] = meta.get("title")
+        else:
+            p["article_num"] = meta.get("article_num")
+            p["article_title"] = None
+
+        # paragraph 번호
+        if meta.get("type") == "paragraph":
+            p["paragraph_num"] = meta.get("number")
+        else:
+            p["paragraph_num"] = None
+
+        # hierarchy_path 생성
+        parts = []
+        if p["chapter_num"]:
+            parts.append(f"제{p['chapter_num']}장")
+        if p["article_num"]:
+            parts.append(f"제{p['article_num']}조")
+        if p["paragraph_num"]:
+            parts.append(f"{p['paragraph_num']}항")
+
+        p["hierarchy_path"] = " > ".join(parts) if parts else None
 
     end_time = time.time()
     logger.info(f"Finished document parsing for {file_path} in {end_time - start_time:.2f} seconds")
