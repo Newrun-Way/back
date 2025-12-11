@@ -61,3 +61,30 @@ def create_chat_session(req: SessionCreateRequest):
         "user_id": req.user_id,
         "title": req.title,
     }
+
+
+class SessionRenameRequest(BaseModel):
+    title: str
+
+@router.put("/{session_id}")
+def update_session_title(session_id: int, req: SessionRenameRequest):
+    """
+    채팅 세션 제목 수정 API
+    """
+    # 1. 세션 존재 여부 확인 (선택 사항이지만 안전을 위해 권장)
+    session = session_service.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # 2. 제목 업데이트
+    success = session_service.update_session_title(session_id, req.title)
+
+    if not success:
+        # get_session은 통과했으나 업데이트 시점에 문제가 생긴 경우
+        raise HTTPException(status_code=500, detail="Failed to update session title")
+
+    return {
+        "session_id": session_id,
+        "title": req.title,
+        "message": "Session title updated successfully"
+    }

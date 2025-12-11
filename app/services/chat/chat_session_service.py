@@ -51,6 +51,21 @@ class ChatSessionService:
         finally:
             db.close()
 
+    def update_session_title(self, session_id: int, title: str):
+        db = get_connection()
+        try:
+            with db.cursor() as cur:
+                cur.execute("""
+                    UPDATE chat_sessions 
+                    SET title=%s, updated_at=NOW()
+                    WHERE id=%s AND is_deleted=0
+                """, (title, session_id))
+                db.commit()
+                # 수정된 행이 있는지 확인 (0이면 해당 세션이 없거나 이미 삭제됨)
+                return cur.rowcount > 0
+        finally:
+            db.close()
+
     def soft_delete(self, session_id: int):
         db = get_connection()
         try:
