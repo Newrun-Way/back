@@ -99,18 +99,46 @@ def get_doc_chunks(external_doc_id: str, limit: int = 1000):
         "count": len(items),
         "items": items
     }
-@router.get("/debug/raw")
-def rag_debug_raw(limit: int = 20):
+@router.get("/debug/latest")
+def debug_latest(limit: int = 300):
+    """
+    VectorDB에서 가장 최근 저장된 embedding을 확인하기 위한 디버그 엔드포인트.
+    실제 external_doc_id가 어떻게 들어갔는지 확인 가능.
+    """
+
     from app.services.rag.rag_service import RAGService
     rag = RAGService()
     col = rag.vector_store.collection
 
-    res = col.get(limit=limit, include=["ids", "metadatas"])
+    # Chroma는 id 순서가 삽입 순서를 반영하므로 limit로 잘라서 역순 정렬 가능
+    res = col.get(
+        include=["metadatas", "documents"],
+        limit=limit
+    )
+
+    ids = res.get("ids", [])
+    metas = res.get("metadatas", [])
+    docs = res.get("documents", [])
+
+    # 가장 최근것이 뒤에 있을 가능성이 높으므로 뒤에서부터 50개 추출
+    items = []
+    for idx in range(len(ids) - 1, max(-1, len(ids) - 51), -1):
+        meta = metas[idx]
+        items.append({
+            "idx": idx,
+            "id": ids[idx],
+            "external_doc_id": meta.get("external_doc_id"),
+            "db_id": meta.get("db_id"),
+            "paragraph_idx": meta.get("paragraph_idx"),
+            "chunk_idx": meta.get("chunk_idx"),
+            "preview": docs[idx][:80] if docs else None,
+        })
+
     return {
-        "count": len(res.get("ids", [])),
-        "ids": res.get("ids", []),
-        "metadatas": res.get("metadatas", []),
+        "count": len(items),
+        "items": items
     }
+
 @router.get("/debug/by-db/{doc_id}")
 def debug_by_db_id(doc_id: int):
     rag = RAGService()
