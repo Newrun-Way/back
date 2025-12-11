@@ -1,6 +1,6 @@
 # app/services/rag/rag_service.py
 from __future__ import annotations
-
+from langchain_core.documents import Document
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 import numpy as np
