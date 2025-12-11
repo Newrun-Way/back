@@ -234,7 +234,7 @@ class RAGService:
             m["hierarchy_path"] = p.get("hierarchy_path")
 
             # 문단 청킹
-            chunks = self.chunker.chunk_text(text, metadata=m)
+            chunks = self.chunker.chunk_text(text, metadata=self._clean_metadata(m))
             docs.extend(chunks)
 
         # ============================================================
@@ -255,7 +255,7 @@ class RAGService:
 
             t_doc = Document(
                 page_content=table_text,
-                metadata=m,
+                metadata=self._clean_metadata(m),
             )
             docs.append(t_doc)
 
@@ -389,3 +389,11 @@ class RAGService:
             return True
 
         return False
+
+    def _clean_metadata(self, meta: dict) -> dict:
+        cleaned = {}
+        for k, v in meta.items():
+            if v is None:
+                continue
+            cleaned[k] = v
+        return cleaned
