@@ -1,8 +1,8 @@
 # app/services/rag/pipeline.py
 from app.services.rag.rag_service import RAGService
 from app.services.llm.llm_service import LLMGenerator
-from app.services.table_service import TableService
-from app.services.table_processor import TableProcessor
+from app.services.document.table_service import TableService
+from app.services.document.table_processor import TableProcessor
 from app.core.config import get_settings
 import os
 from typing import Optional, Dict, Any
