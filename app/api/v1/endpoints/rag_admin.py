@@ -154,11 +154,11 @@ def debug_by_external(external_doc_id: str, limit: int = 5000):
     # include를 명시해야 문서/메타데이터를 가져올 수 있음
     res = col.get(
         where={"external_doc_id": external_doc_id},
-        include=["ids", "metadatas", "documents"],
+        include=["metadatas", "documents"],
         limit=limit
     )
 
-    ids = res.get("ids") or []
+    ids = res.get("ids",[])
     metas = res.get("metadatas") or []
     docs = res.get("documents") or []
 
