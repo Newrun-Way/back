@@ -163,54 +163,89 @@ class LLMGenerator:
         self,
         contexts: List[Dict[str, Any]],
         question: str,
+        *,
+        table_service=None,
+        table_processor=None,
     ) -> Dict[str, Any]:
         """
-        출처 정보를 포함한 답변 생성 (기존 llm.py의 generate_with_sources와 호환).
+        표(table) 청크 자동 처리 버전.
         contexts: [{"content": str, "metadata": dict, "score": float}, ...]
+        table_service: TableService 인스턴스 (문서 내 table JSON 불러오기)
+        table_processor: TableProcessor 인스턴스 (markdown 변환)
         """
-        # 컨텍스트 포맷팅
+
         context_parts: List[str] = []
+
         for i, ctx in enumerate(contexts):
             content = ctx.get("content", "")
             metadata = ctx.get("metadata", {}) or {}
+
             doc_name = metadata.get("doc_name", "알 수 없음")
             hierarchy_path = metadata.get("hierarchy_path", "")
+            chunk_type = metadata.get("type", "paragraph")
 
-            header = f"[문서 {i+1}: {doc_name}]"
+            # -------------------------
+            # 1) 공통 헤더 생성
+            # -------------------------
+            header = f"[문서 {i + 1}: {doc_name}]"
             if hierarchy_path:
                 header += f"\n[위치: {hierarchy_path}]"
 
-            context_parts.append(f"{header}\n{content}")
+            block = f"{header}\n"
 
+            # -------------------------
+            # 2) 문단 청크
+            # -------------------------
+            if chunk_type != "table":
+                block += content
+
+            # -------------------------
+            # 3) 표 청크 처리 (자동 삽입)
+            # -------------------------
+            else:
+                table_id = metadata.get("table_id")
+                if table_id and table_service and table_processor:
+                    try:
+                        # 원본 table JSON 불러오기
+                        table_json = table_service.get_table(doc_name, table_id)
+                        if table_json:
+                            md_table = table_processor.table_to_markdown(table_json)
+                            block += f"\n### [관련 표: {table_id}]\n{md_table}\n"
+                        else:
+                            block += f"\n(표 {table_id} 데이터를 찾을 수 없습니다)\n"
+                    except Exception as e:
+                        block += f"\n(표 렌더링 오류: {e})\n"
+
+                # fallback: 표 텍스트 내용 그대로
+                else:
+                    block += content
+
+            context_parts.append(block)
+
+        # -------------------------------------------------
+        # 프롬프트 조립
+        # -------------------------------------------------
         context_str = "\n\n".join(context_parts)
-
-        # 답변 생성
         answer = self.generate(context_str, question)
 
-        # 출처 정보 구성
+        # -------------------------------------------------
+        # 출처 정보 생성
+        # -------------------------------------------------
         sources: List[Dict[str, Any]] = []
         for i, ctx in enumerate(contexts):
             metadata = ctx.get("metadata", {}) or {}
-            source_info: Dict[str, Any] = {
-                "index": i + 1,
-                "doc_name": metadata.get("doc_name", "알 수 없음"),
-                "doc_id": metadata.get("doc_id", ""),
-                "chunk_id": metadata.get("chunk_id", -1),
-                "chunk_index": metadata.get("chunk_index", -1),
-                "score": ctx.get("score", 0.0),
-                "content_preview": ctx.get("content", "")[:200] + "...",
-                # 문서 구조 정보가 있으면 포함
-                "chapter_number": metadata.get("chapter_number", ""),
-                "chapter_title": metadata.get("chapter_title", ""),
-                "article_number": metadata.get("article_number", ""),
-                "article_title": metadata.get("article_title", ""),
-                "hierarchy_path": metadata.get("hierarchy_path", ""),
-                # 사용자/프로젝트 관련 메타 (있으면)
-                "user_id": metadata.get("user_id", ""),
-                "dept_id": metadata.get("dept_id", ""),
-                "project_id": metadata.get("project_id", ""),
-            }
-            sources.append(source_info)
+            sources.append(
+                {
+                    "index": i + 1,
+                    "doc_name": metadata.get("doc_name", "알 수 없음"),
+                    "doc_id": metadata.get("doc_id", ""),
+                    "chunk_id": metadata.get("chunk_id", -1),
+                    "score": ctx.get("score", 0.0),
+                    "hierarchy_path": metadata.get("hierarchy_path", ""),
+                    "type": metadata.get("type", "paragraph"),
+                    "table_id": metadata.get("table_id", None),
+                }
+            )
 
         return {
             "answer": answer,
