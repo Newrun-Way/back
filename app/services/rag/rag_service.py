@@ -208,7 +208,7 @@ class RAGService:
         고유 chunk_id = {doc_id}-{paragraph_idx}-{chunk_idx}
         """
         meta = parsed.get("metadata", {}) or {}
-        doc_id = meta.get("doc_id")
+        doc_id = meta.get("db_id")
 
         docs: List[Document] = []
         ids: List[str] = []
