@@ -204,51 +204,84 @@ class RAGService:
         persist: bool = True,
     ) -> Dict:
         """
-        샤딩 제거 → 글로벌 인덱싱만 수행.
-        고유 chunk_id = {doc_id}-{paragraph_idx}-{chunk_idx}
+        구조 메타(chapter/article/paragraph/hierarchy_path)를 반영하고,
+        parser에서 주입한 표(table)도 함께 청킹하여 RAG 인덱싱한다.
         """
         meta = parsed.get("metadata", {}) or {}
-        doc_id = meta.get("db_id")
+        paragraphs = parsed.get("paragraphs", []) or []
+        tables = parsed.get("tables", []) or []  # 🔥 parser 리팩토링으로 생성된 표 데이터
 
         docs: List[Document] = []
-        ids: List[str] = []
 
-        for p_idx, text in enumerate(_iter_paragraph_texts(parsed)):
-            if not text.strip():
+        # ============================================================
+        # 1) 문단(paragraph) 청킹
+        # ============================================================
+        for idx, text in enumerate(_iter_paragraph_texts(parsed)):
+            if not text or not text.strip():
                 continue
 
+            p = paragraphs[idx] if idx < len(paragraphs) else {}
+
             m = dict(meta)
-            m["paragraph_idx"] = p_idx
+            m["paragraph_idx"] = idx
 
+            # 🔥 구조 메타 반영
+            m["chapter_num"] = p.get("chapter_num")
+            m["chapter_title"] = p.get("chapter_title")
+            m["article_num"] = p.get("article_num")
+            m["article_title"] = p.get("article_title")
+            m["paragraph_num"] = p.get("paragraph_num")
+            m["hierarchy_path"] = p.get("hierarchy_path")
+
+            # 문단 청킹
             chunks = self.chunker.chunk_text(text, metadata=m)
+            docs.extend(chunks)
 
-            for c_idx, chunk in enumerate(chunks):
-                # 고유 ID 부여
-                chunk_id = f"{doc_id}-{p_idx}-{c_idx}"
+        # ============================================================
+        # 2) 표(table) 청킹 — 🔥 신규 추가
+        # ============================================================
+        for t in tables:
+            table_text = self.chunker._format_table(t)  # 표를 사람이 읽을 수 있는 텍스트로 변환
 
-                # 메타데이터에도 기록
-                chunk.metadata["id"] = chunk_id
+            m = dict(meta)
+            m["type"] = "table"
+            m["table_id"] = t.get("table_id")
+            m["table_summary"] = t.get("summary", "")
 
-                # LangChain Document 객체 유지
-                docs.append(chunk)
-                ids.append(chunk_id)
+            # 🔥 구조 메타 (parser에서 기본 placeholder, 추후 자동매핑하면 개선됨)
+            m["chapter_num"] = t.get("chapter_num")
+            m["article_num"] = t.get("article_num")
+            m["hierarchy_path"] = t.get("hierarchy_path")
 
+            t_doc = Document(
+                page_content=table_text,
+                metadata=m,
+            )
+            docs.append(t_doc)
+
+        # ============================================================
+        # 3) 임베딩 + 벡터스토어 저장
+        # ============================================================
         if not docs:
-            return {"indexed": 0, "shards": []}
+            logger.warning("색인할 문서 조각이 없습니다.")
+            return {"total_chunks": 0}
 
-        # 임베딩 생성
-        embs = self.embedder.embed_texts(
-            [d.page_content for d in docs]
-        ).astype(np.float32)
+        embeddings = self.embedder.embed_documents(docs)
 
-        # ChromaDB에 추가 (🔥 ids 전달)
-        global_store = self.vector_store
-        global_store.add_documents(docs, embs, ids=ids)
+        ids = [
+            f"{meta.get('external_doc_id', 'doc')}_{i}"
+            for i in range(len(docs))
+        ]
+
+        self.vector_store.add_documents(docs, embeddings, ids=ids)
 
         if persist:
-            self._save_store(global_store, self.vector_dir)
+            self._save_store(self.vector_store, self.vector_dir)
 
-        return {"indexed": len(docs), "shards": ["global"]}
+        return {
+            "total_chunks": len(docs),
+            "doc_id": meta.get("external_doc_id"),
+        }
 
     # ---------------------------------------------------------------------
     # Query (Reranker 통합)
