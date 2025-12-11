@@ -16,9 +16,15 @@ redis_client = redis.Redis.from_url(settings.REDIS_URL)
 
 @shared_task(bind=True)
 def process_document(self, file_path: str, metadata: dict):
-
+    """
+    파싱 → 청킹 → 임베딩 Celery Task
+    - requests.approve_request()에서 넘긴 metadata를
+      parsing.upload_and_parse()와 동일한 스키마로 해석해서 사용
+    """
+    # 레거시/기존 코드 호환용: doc_id == external_doc_id
     doc_id = metadata.get("doc_id")
     request_id = metadata.get("request_id")
+
     doc_service = DocumentService()
     req_service = RequestService()
 
@@ -28,31 +34,44 @@ def process_document(self, file_path: str, metadata: dict):
         if not path.exists():
             raise FileNotFoundError(f"파일을 찾을 수 없습니다: {file_path}")
 
-        # 2) 파싱
+        # 2) 메타 구성 (관리자 업로드 레거시와 동일 스키마)
+        #    - parsing.upload_and_parse() 의 meta와 최대한 동일하게 맞춘다.
         meta = {
+            "db_id": metadata.get("db_id"),
+            "external_doc_id": metadata.get("external_doc_id") or metadata.get("doc_id"),
             "user_id": metadata.get("user_id"),
             "dept_id": metadata.get("dept_id"),
             "project_id": metadata.get("project_id"),
             "category": metadata.get("category"),
+            "version": metadata.get("version"),
+            "upload_date": metadata.get("upload_date"),
+            "filename": metadata.get("filename"),
+            "file_ext": metadata.get("file_ext"),
+            # parsing.upload_and_parse 에서의 file_path와 같은 의미:
+            # UPLOAD_DIR 기준 상대 경로
+            "file_path": metadata.get("file_path"),
         }
+        # 3) 파싱
         parsed = parse_document(
             str(path),
-            doc_id=metadata["doc_id"],
+            doc_id=meta["external_doc_id"],  # = external_doc_id
             meta=meta,
         )
+
+        # 4) 청킹/임베딩
         from app.services.rag.rag_service import RAGService
-        # 3) 청킹/임베딩
+
         rag = RAGService()
         rag.index_parsed_paragraphs_sharded(parsed, persist=True)
 
-        # 4) 문서 상태 = PARSED
+        # 5) 문서 상태 = PARSED (external_doc_id 기준)
         doc_service.update_status(doc_id, "PARSED")
 
-        # 5) 요청 상태 = DONE
+        # 6) 요청 상태 = DONE
         if request_id:
             req_service.update_status(request_id, "DONE")
 
-        # 6) SSE publish — 성공 알림
+        # 7) SSE publish — 성공 알림
         redis_client.publish(
             f"request-events:{request_id}",
             json.dumps({

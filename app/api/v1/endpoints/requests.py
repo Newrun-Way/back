@@ -94,13 +94,37 @@ def approve_request(req_id: int):
 
     external_doc_id = doc["external_doc_id"]
 
+    # ✅ Celery로 넘길 메타를 parsing.upload_and_parse() 스키마와 맞춤
     metadata = {
-        "doc_id": external_doc_id,
+        # 레거시 호환용 (DocumentService.update_status 등에서 사용)
+        "doc_id": external_doc_id,  # = external_doc_id
+
+        # 문서 PK
+        "db_id": doc["id"],
+
+        # 외부 문서 ID
+        "external_doc_id": external_doc_id,
+
+        # ACL / 기본 메타
         "user_id": doc["user_id"],
         "dept_id": doc["dept_id"],
         "project_id": doc["project_id"],
         "category": doc["category"],
-        "request_id": req_id,  # Celery에 넘겨서 후처리 쉽게
+
+        # 버전 / 파일 정보
+        "version": doc.get("version"),
+        "upload_date": (
+            doc["upload_date"].isoformat()
+            if doc.get("upload_date")
+            else None
+        ),
+        "filename": doc.get("original_filename"),
+        "file_ext": doc.get("file_ext"),
+        # parsing.upload_and_parse 의 file_path와 동일한 규칙 (UPLOAD_DIR 기준 상대 경로)
+        "file_path": doc.get("stored_path"),
+
+        # 요청 트래킹
+        "request_id": req_id,
     }
 
     # -------------------- CREATE --------------------
