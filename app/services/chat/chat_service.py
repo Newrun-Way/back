@@ -1,3 +1,5 @@
+#app/services/chat/chat_service.py
+import json
 from pathlib import Path
 from typing import Dict, Any, AsyncGenerator
 
