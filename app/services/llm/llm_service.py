@@ -189,7 +189,7 @@ class LLMGenerator:
             # -------------------------
             # 1) 공통 헤더 생성
             # -------------------------
-            header = f"[문서 {i + 1}: {doc_name}]"
+            header = f"[{doc_name}]"
             if hierarchy_path:
                 header += f"\n[위치: {hierarchy_path}]"
 
@@ -239,7 +239,7 @@ class LLMGenerator:
             sources.append(
                 {
                     "index": i + 1,
-                    "doc_name": metadata.get("doc_name", "알 수 없음"),
+                    "doc_name": metadata.get("filename", "알 수 없음"),
                     "doc_id": metadata.get("doc_id", ""),
                     "chunk_id": metadata.get("chunk_id", -1),
                     "score": ctx.get("score", 0.0),
