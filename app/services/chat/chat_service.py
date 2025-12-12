@@ -6,12 +6,11 @@ from app.core.config import get_settings
 # from app.services.rag.pipeline import RAGPipeline
 from app.services.rag.rag_service import RAGService
 from app.services.chat.chat_memory_chroma import ChatMemory
-from app.services.chat.prompt_builder import build_prompt
 from app.services.llm.llm_service import LLMService, LLMGenerator
 from app.services.document.table_service import TableService
 from app.services.document.table_processor import TableProcessor
+from app.services.chat.prompt_builder import PromptBuilder
 from app.core.embedder_singleton import GLOBAL_EMBEDDER
-
 class ChatService:
     def __init__(self):
         settings = get_settings()
@@ -24,6 +23,7 @@ class ChatService:
             summary_trigger_turns=6,
         )
         self.llm = LLMGenerator()
+        self.prompt_builder = PromptBuilder()
         # 🔥 필수: 표 서비스 등록
         self.table_service = TableService()
         self.table_processor = TableProcessor()
@@ -56,44 +56,7 @@ class ChatService:
             cursor.close()
             conn.close()
 
-    #비스트리밍채팅
-    def chat(self, conversation_id: str, message: str, user_id: int):
 
-        # 1. 유저 정보(Context)
-        user_context = self._fetch_user_context(user_id)
-
-        # 2. 대화 기록 저장(user 턴)
-        self.mem.add_turn(conversation_id, "user", message)
-
-        # 3. 요약 / 최근 대화
-        summary = self.mem.get_summary(conversation_id)
-        recent = self.mem.get_recent(conversation_id, k=20)
-
-        # 4. RAG 검색
-        rag_result = self.rag.retriever.query(message, user=user_context)
-
-        # 5. 결과 처리
-        docs = []
-        if rag_result and isinstance(rag_result, list):
-            # 딕셔너리 리스트라면 content만 추출
-            if len(rag_result) > 0 and isinstance(rag_result[0], dict):
-                docs = [doc["content"] for doc in rag_result if "content" in doc]
-            else:
-                docs = rag_result
-
-        # 6. 프롬프트 생성
-        prompt = build_prompt(summary, recent, docs, message)
-
-        # 7. LLM 답변 생성
-        answer = self.llm.generate(
-            system_prompt="기업 문서를 기반으로 답변하는 RAG 챗봇. 현재 질문을 최우선 처리하라.",
-            user_prompt=prompt,
-        )
-
-        # 8. 챗봇 답변 저장
-        self.mem.add_turn(conversation_id, "assistant", answer)
-
-        return answer
 
     #스트리밍 채팅
     async def chat_stream(
