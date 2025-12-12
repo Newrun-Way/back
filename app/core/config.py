@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     # 업로드/파싱된 파일
     UPLOAD_DIR: str = "/app/app/data/uploads"
-    EXTRACTED_DIR: str = "/app/app/data/extracted_results"
+    EXTRACTED_DIR: str = "/app/app/data/uploads"
 
     #Celery & Redis 설정
     CELERY_BROKER_URL: str = "redis://redis:6379/0"

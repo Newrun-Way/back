@@ -158,101 +158,64 @@ class LLMGenerator:
 
     def generate_with_sources(
         self,
-        contexts: List[Dict[str, Any]],
+        contexts: list,
         question: str,
-        *,
         table_service=None,
         table_processor=None,
-    ) -> Dict[str, Any]:
+    ):
         """
-        표(table) 청크 자동 처리 버전.
-        contexts: [{"content": str, "metadata": dict, "score": float}, ...]
-        table_service: TableService 인스턴스 (문서 내 table JSON 불러오기)
-        table_processor: TableProcessor 인스턴스 (markdown 변환)
+        contexts: retriever 결과
+        table_processor.get_table(file_path, table_id)를 호출하도록 구조 변경
         """
 
-        context_parts: List[str] = []
+        final_sources = []
+        context_parts = []
 
-        for i, ctx in enumerate(contexts):
+        for idx, ctx in enumerate(contexts, start=1):
             content = ctx.get("content", "")
-            metadata = ctx.get("metadata", {}) or {}
+            meta = ctx.get("metadata", {})
+            score = ctx.get("score", 0.0)
 
-            doc_name = (
-                    metadata.get("filename")
-                    or metadata.get("external_doc_id")
-                    or metadata.get("file_path")
-                    or "문서"
-            )
-            hierarchy_path = metadata.get("file_path", "")
-            chunk_type = metadata.get("type", "paragraph")
+            file_path = meta.get("file_path")  # 반드시 존재
+            table_id = meta.get("table_id")
+            doc_name = meta.get("filename") or meta.get("external_doc_id")
 
-            # -------------------------
-            # 1) 공통 헤더 생성
-            # -------------------------
-            header = f"[{doc_name}]"
-            if hierarchy_path:
-                header += f"\n[위치: {hierarchy_path}]"
+            table_json = None
+            if table_id and table_processor:
+                table_json = table_processor.get_table(file_path, table_id)
 
-            block = f"{header}\n"
-
-            # -------------------------
-            # 2) 문단 청크
-            # -------------------------
-            if chunk_type != "table":
-                block += content
-
-            # -------------------------
-            # 3) 표 청크 처리 (자동 삽입)
-            # -------------------------
+            # 표가 있다면 LLM context에 추가
+            if table_json:
+                content += f"\n\n[표 {table_id} 데이터]\n{json.dumps(table_json, ensure_ascii=False, indent=2)}"
             else:
-                table_id = metadata.get("table_id")
-                if table_id and table_service and table_processor:
-                    try:
-                        # 원본 table JSON 불러오기
-                        table_json = table_processor.get_table(doc_name, table_id)
-                        if table_json:
-                            md_table = table_processor.table_to_markdown(table_json)
-                            block += f"\n### [관련 표: {table_id}]\n{md_table}\n"
-                        else:
-                            block += f"\n(표 {table_id} 데이터를 찾을 수 없습니다)\n"
-                    except Exception as e:
-                        block += f"\n(표 렌더링 오류: {e})\n"
+                if meta.get("type") == "table":
+                    content += f"\n\n(표 {table_id} 데이터를 찾을 수 없습니다)"
 
-                # fallback: 표 텍스트 내용 그대로
-                else:
-                    block += content
-
-            context_parts.append(block)
-
-        # -------------------------------------------------
-        # 프롬프트 조립
-        # -------------------------------------------------
-        context_str = "\n\n".join(context_parts)
-        answer = self.generate(context_str, question)
-
-        # -------------------------------------------------
-        # 출처 정보 생성
-        # -------------------------------------------------
-        sources: List[Dict[str, Any]] = []
-        for i, ctx in enumerate(contexts):
-            metadata = ctx.get("metadata", {}) or {}
-            sources.append(
-                {
-                    "index": i + 1,
-                    "doc_name": metadata.get("filename", "알 수 없음"),
-                    "doc_id": metadata.get("doc_id", ""),
-                    "chunk_id": metadata.get("chunk_id", -1),
-                    "score": ctx.get("score", 0.0),
-                    "hierarchy_path": metadata.get("hierarchy_path", ""),
-                    "type": metadata.get("type", "paragraph"),
-                    "table_id": metadata.get("table_id", None),
-                }
+            # LLM 문맥 구성
+            context_parts.append(
+                f"[{doc_name}]\n"
+                f"[위치: {file_path}]\n"
+                f"{content}\n"
             )
+
+            final_sources.append({
+                "index": idx,
+                "doc_name": doc_name,
+                "doc_id": meta.get("db_id", ""),
+                "chunk_id": meta.get("chunk_id", -1),
+                "score": score,
+                "type": meta.get("type"),
+                "table_id": table_id,
+            })
+
+        context_used = "\n".join(context_parts)
+
+        answer = self.generate(question, context_used)
 
         return {
             "answer": answer,
-            "sources": sources,
-            "context_used": context_str,
+            "sources": final_sources,
+            "context_used": context_used,
         }
 
     async def generate_stream(self, context: str, question: str):
