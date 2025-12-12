@@ -16,7 +16,7 @@ class TableService:
 
     def __init__(self):
         settings = get_settings()
-        extracted_dir = Path(getattr(settings, "EXTRACTED_DIR", "extracted_results"))
+        extracted_dir = Path(settings.EXTRACTED_DIR)
         self.processor = TableProcessor(extracted_dir=extracted_dir)
 
     def get_tables_for_document(self, original_filename: str) -> List[Dict[str, Any]]:

@@ -11,17 +11,17 @@ from loguru import logger
 
 class TableProcessor:
     """표 참조 처리 클래스"""
-    
+
     def __init__(self, extracted_dir: Path = None):
         """
         Args:
             extracted_dir: 추출된 결과 디렉토리 (extracted_results/)
         """
-        self.extracted_dir = extracted_dir or Path("extracted_results")
+        self.extracted_dir = Path(settings.EXTRACTED_DIR)
         self.table_cache = {}  # {doc_name: {table_id: table_data}}
-        
+
         logger.info(f"TableProcessor 초기화: {self.extracted_dir}")
-    
+
     def load_tables_from_doc(self, doc_name: str) -> Dict[str, Dict]:
         """
         문서의 표 데이터를 로드
