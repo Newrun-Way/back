@@ -5,8 +5,8 @@ from typing import Dict, Any, AsyncGenerator
 
 from app.core.db import get_connection
 from app.core.config import get_settings
-# from app.services.rag.pipeline import RAGPipeline
-from app.services.rag.rag_service import RAGService
+from app.services.rag.pipeline import RAGPipeline
+# from app.services.rag.rag_service import RAGService
 from app.services.chat.chat_memory_chroma import ChatMemory
 from app.services.llm.llm_service import LLMService, LLMGenerator
 from app.services.document.table_service import TableService
@@ -17,7 +17,7 @@ class ChatService:
     def __init__(self):
         settings = get_settings()
         self.embedder = GLOBAL_EMBEDDER
-        self.rag = RAGService()
+        self.rag = RAGPipeline()
 
         self.mem = ChatMemory(
             persist_dir=Path(settings.VECTOR_STORE_DIR) / "chat",
@@ -98,7 +98,7 @@ class ChatService:
         # ---------------------------------------------------------
         # 4) RAG 검색
         # ---------------------------------------------------------
-        rag_contexts = self.rag.query(
+        rag_contexts = self.rag.retrieve(
             question=message,
             user={"id": user_id}
         )
