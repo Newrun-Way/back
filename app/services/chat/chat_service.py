@@ -143,9 +143,6 @@ class ChatService:
         # 답변 후 assistant turn 저장
         self.mem.add_turn(conversation_id, "assistant", full_answer)
 
-        # 요약 업데이트
-        self.mem.summarize_if_needed(conversation_id)
-
         final_payload = {
             "answer": full_answer,
             "sources": sources,
