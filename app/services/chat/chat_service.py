@@ -91,44 +91,99 @@ class ChatService:
 
     #스트리밍 채팅
     async def chat_stream(
-            self, conversation_id: str, message: str, user_id: int
+            self,
+            conversation_id: str,
+            message: str,
+            user_id: int
     ) -> AsyncGenerator[str, None]:
+        """
+        End-to-End 구조:
+        1) 유저컨텍스트 로딩
+        2) 메모리에 유저 메시지 저장
+        3) 기존 대화요약 + 최근대화 불러오기
+        4) RAG 검색
+        5) generate_with_sources()로 표 포함 context 생성
+        6) prompt_builder로 최종 프롬프트 구성
+        7) LLM token 스트리밍
+        8) 종료 시 sources/context/answer 송신
+        """
 
-        # 1. 유저 정보
+        # ---------------------------------------------------------
+        # 1) 유저 정보
+        # ---------------------------------------------------------
         user_context = self._fetch_user_context(user_id)
 
-        # 2. 유저 메시지 저장
+        # ---------------------------------------------------------
+        # 2) 유저 발화 저장
+        # ---------------------------------------------------------
         self.mem.add_turn(conversation_id, "user", message)
 
-        # 3. 기존 대화 / 요약 가져오기
+        # ---------------------------------------------------------
+        # 3) 기존 요약 + 최근 대화
+        # ---------------------------------------------------------
         summary = self.mem.get_summary(conversation_id)
-        recent = self.mem.get_recent(conversation_id, k=20)
+        recent_turns = self.mem.get_recent(conversation_id, k=20)
 
-        # 4. RAG 검색
-        rag_result = self.rag.retriever.query(message, user=user_context)
+        # ---------------------------------------------------------
+        # 4) RAG 검색
+        # ---------------------------------------------------------
+        rag_contexts = self.rag.query(
+            question=message,
+            user={"id": user_id}
+        )
 
-        docs = []
-        if isinstance(rag_result, list):
-            if rag_result and isinstance(rag_result[0], dict):
-                docs = [d["content"] for d in rag_result if "content" in d]
-            else:
-                docs = rag_result
+        # ---------------------------------------------------------
+        # 5) generate_with_sources (문단+표 자동 포함)
+        # ---------------------------------------------------------
+        final = self.llm.generate_with_sources(
+            rag_contexts,
+            message,
+            table_service=self.table_service,
+            table_processor=self.table_processor,
+        )
 
-        # 5. 프롬프트 생성
-        prompt = build_prompt(summary, recent, docs, message)
+        # 문맥 / 출처
+        context_str = final["context_used"]
+        sources = final["sources"]
 
-        # 6. 스트리밍 LLM 호출
-        answer_collector = ""
+        # ---------------------------------------------------------
+        # 6) prompt_builder로 최종 프롬프트 구성
+        # ---------------------------------------------------------
+        # prompt_builder는 summary + 최근대화 + RAG context + user_message를 합친 prompt를 생성해야 한다.
+        full_prompt = self.prompt_builder.build(
+            summary=summary,
+            recent_turns=recent_turns,
+            docs=[context_str],  # RAG context
+            user_message=message,
+            user_context=user_context,
+        )
 
-        async for tok in self.llm.generate_stream(
-                system_prompt="기업 문서를 기반으로 답변하는 RAG 챗봇. 현재 질문을 최우선 처리하라.",
-                user_prompt=prompt,
-        ):
-            answer_collector += tok
-            yield tok  # 토큰단위 리턴
+        # 스트리밍 답변을 쌓을 변수
+        full_answer = ""
 
-        # 7. assistant 메시지 저장
-        self.mem.add_turn(conversation_id, "assistant", answer_collector)
+        # ---------------------------------------------------------
+        # 7) LLM 스트리밍
+        # ---------------------------------------------------------
+        async for tok in self.llm.generate_stream(full_prompt):
+            full_answer += tok
+            yield tok
 
-        # 8. 스트리밍 끝
-        return
+        # ---------------------------------------------------------
+        # 8) 종료 후 메타데이터 전달
+        # ---------------------------------------------------------
+        # 답변 후 assistant turn 저장
+        self.mem.add_turn(conversation_id, "assistant", full_answer)
+
+        # 요약 업데이트
+        self.mem.summarize_if_needed(conversation_id)
+
+        final_payload = {
+            "answer": full_answer,
+            "sources": sources,
+            "context_used": context_str,
+        }
+
+        yield (
+            f"\n\nevent: metadata\n"
+            f"data: {json.dumps(final_payload, ensure_ascii=False)}\n\n"
+        )
