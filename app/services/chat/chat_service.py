@@ -113,7 +113,9 @@ class ChatService:
             question=message,
             user={"id": user_id}
         )
-
+        print("# 4) RAG 검색")
+        print("retrieve",rag_contexts)
+        print("# 5) generate_with_sources")
         # ---------------------------------------------------------
         # 5) generate_with_sources (문단+표 자동 포함)
         # ---------------------------------------------------------
