@@ -3,7 +3,8 @@ from typing import Dict, Any, AsyncGenerator
 
 from app.core.db import get_connection
 from app.core.config import get_settings
-from app.services.rag.pipeline import RAGPipeline
+# from app.services.rag.pipeline import RAGPipeline
+from app.services.rag.rag_service import RAGService
 from app.services.chat.chat_memory_chroma import ChatMemory
 from app.services.chat.prompt_builder import build_prompt
 from app.services.llm.llm_service import LLMService, LLMGenerator
@@ -15,7 +16,7 @@ class ChatService:
     def __init__(self):
         settings = get_settings()
         self.embedder = GLOBAL_EMBEDDER
-        self.rag = RAGPipeline()
+        self.rag = RAGService()
 
         self.mem = ChatMemory(
             persist_dir=Path(settings.VECTOR_STORE_DIR) / "chat",
