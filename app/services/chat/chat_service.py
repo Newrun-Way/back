@@ -7,6 +7,8 @@ from app.services.rag.pipeline import RAGPipeline
 from app.services.chat.chat_memory_chroma import ChatMemory
 from app.services.chat.prompt_builder import build_prompt
 from app.services.llm.llm_service import LLMService, LLMGenerator
+from app.services.document.table_service import TableService
+from app.services.document.table_processor import TableProcessor
 from app.core.embedder_singleton import GLOBAL_EMBEDDER
 
 class ChatService:
@@ -21,6 +23,9 @@ class ChatService:
             summary_trigger_turns=6,
         )
         self.llm = LLMGenerator()
+        # 🔥 필수: 표 서비스 등록
+        self.table_service = TableService()
+        self.table_processor = TableProcessor()
 
     # [Helper] DB에서 유저 권한 정보 가져오기
     def _fetch_user_context(self, user_id: int) -> Dict[str, Any]:
