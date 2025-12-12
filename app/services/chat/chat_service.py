@@ -133,7 +133,7 @@ class ChatService:
         # ---------------------------------------------------------
         # 7) LLM 스트리밍
         # ---------------------------------------------------------
-        async for tok in self.llm.generate_stream(full_prompt):
+        async for tok in self.llm.generate_stream(full_prompt, message):
             full_answer += tok
             yield tok
 
