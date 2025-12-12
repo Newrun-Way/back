@@ -4,6 +4,7 @@ from pathlib import Path
 import chromadb
 from app.core.config import get_settings
 from app.services.rag.rag_service import RAGService
+from app.services.document.table_processor import TableProcessor
 
 router = APIRouter(prefix="/rag-admin", tags=["dev"])
 settings = get_settings()
@@ -149,12 +150,24 @@ def debug_by_db_id(doc_id: int):
         include=["documents", "metadatas"],
         limit=10000
     )
+    table_proc = TableProcessor(settings.EXTRACTED_DIR)
 
     items = []
     docs = result.get("documents", [])
     metas = result.get("metadatas", [])
 
     for i, meta in enumerate(metas):
+        table_json = None
+
+        # 표일 경우: 테이블 JSON 로드
+        if meta.get("type") == "table":
+            table_id = meta.get("table_id")
+            filename = meta.get("filename") or meta.get("external_doc_id")
+
+            if filename:
+                doc_dir = f"extracted_{filename.replace('.hwpx', '')}"
+                table_json = table_proc.get_table(doc_dir, table_id)
+
         items.append({
             "idx": i,
             "chunk_id": meta.get("chunk_id"),
@@ -162,6 +175,7 @@ def debug_by_db_id(doc_id: int):
             "db_id": meta.get("db_id"),
             "external_doc_id": meta.get("external_doc_id"),
             "preview": docs[i][:80],
+            "table": table_json,  # ← 표 JSON 포함!
         })
 
     return {
