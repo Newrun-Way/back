@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from loguru import logger
 
+from app.core.config import get_settings
 
 class TableProcessor:
     """표 참조 처리 클래스"""
@@ -17,6 +18,7 @@ class TableProcessor:
         Args:
             extracted_dir: 추출된 결과 디렉토리 (extracted_results/)
         """
+        settings = get_settings()
         self.extracted_dir = Path(settings.EXTRACTED_DIR)
         self.table_cache = {}  # {doc_name: {table_id: table_data}}
 
