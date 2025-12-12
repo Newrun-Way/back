@@ -204,7 +204,7 @@ class LLMGenerator:
                 if table_id and table_service and table_processor:
                     try:
                         # 원본 table JSON 불러오기
-                        table_json = table_service.get_table(doc_name, table_id)
+                        table_json = table_processor.get_table(doc_name, table_id)
                         if table_json:
                             md_table = table_processor.table_to_markdown(table_json)
                             block += f"\n### [관련 표: {table_id}]\n{md_table}\n"
