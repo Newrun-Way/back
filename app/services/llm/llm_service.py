@@ -52,7 +52,7 @@ class LLMService:
                 ],
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
-                stream=True, #스트리밍 테스트
+                stream=False, #일반 generate는 stream하지않고 choice를 사용
             )
             answer = response.choices[0].message.content
 
@@ -148,14 +148,11 @@ class LLMGenerator:
         )
 
     def generate(self, context: str, question: str) -> str:
-        """
-        질문에 대한 답변 생성 (기존 llm.py의 generate와 동일한 인터페이스).
-        """
+        #질문에 대한 답변 생성 (기존 llm.py의 generate와 동일한 인터페이스)
         user_prompt = self.user_prompt_template.format(
             context=context,
             question=question,
         )
-
         logger.info(f"LLMGenerator.generate 호출: question={question[:50]!r}")
         return self.llm.generate(self.system_prompt, user_prompt)
 
