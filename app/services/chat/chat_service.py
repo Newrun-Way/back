@@ -24,7 +24,18 @@ class ChatService:
             embedder=self.embedder,
             summary_trigger_turns=6,
         )
-        self.llm = LLMGenerator()
+        self.llm = LLMGenerator(
+            api_key=self.settings.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY"),
+            model=self.settings.LLM_MODEL if hasattr(self.settings, "LLM_MODEL") else "gpt-4o-mini",
+            temperature=getattr(self.settings, "LLM_TEMPERATURE", 0.7),
+            max_tokens=getattr(self.settings, "LLM_MAX_TOKENS", 1024),
+            system_prompt=getattr(self.settings, "SYSTEM_PROMPT", "당신은 문서 기반 QA 어시스턴트입니다."),
+            user_prompt_template=getattr(
+                self.settings,
+                "USER_PROMPT_TEMPLATE",
+                "다음 문서를 참고하여 질문에 답하세요.\n\n{context}\n\n질문: {question}\n답변:",
+            ),
+        )
         self.prompt_builder = PromptBuilder()
         # 🔥 필수: 표 서비스 등록
         self.table_service = TableService()
