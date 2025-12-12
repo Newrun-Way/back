@@ -325,7 +325,8 @@ class RAGService:
 
         if not acl_filtered:
             print("NOT acl_filtered")
-            return []
+            acl_filtered = results
+            # return []
 
         # 🔹 Reranker 적용 여부
         if self.use_reranker and self.reranker is not None:
