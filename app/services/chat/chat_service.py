@@ -125,11 +125,11 @@ class ChatService:
             table_service=self.table_service,
             table_processor=self.table_processor,
         )
-
+        print("final", final)
         # 문맥 / 출처
         context_str = final["context_used"]
         sources = final["sources"]
-
+        print("# 6) prompt_builder")
         # ---------------------------------------------------------
         # 6) prompt_builder로 최종 프롬프트 구성
         # ---------------------------------------------------------
@@ -141,10 +141,10 @@ class ChatService:
             user_message=message,
             user_context=user_context,
         )
-
+        print(full_prompt)
         # 스트리밍 답변을 쌓을 변수
         full_answer = ""
-
+        print("# 7) LLM 스트리밍")
         # ---------------------------------------------------------
         # 7) LLM 스트리밍
         # ---------------------------------------------------------
