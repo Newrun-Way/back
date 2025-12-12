@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from lxml import etree
 from app.core.config import get_settings
-
+from loguru import logger
 settings = get_settings()
 
 def extract_hwpx_with_structure(hwpx_path: str):
