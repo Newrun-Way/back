@@ -39,7 +39,7 @@ class TableProcessor:
             return self.table_cache[doc_name]
         
         # 표데이터.json 파일 찾기
-        doc_dir = self.extracted_dir / f"extracted_{doc_name}"
+        doc_dir = self.extracted_dir / {doc_name}
         if not doc_dir.exists():
             logger.warning(f"문서 디렉토리를 찾을 수 없습니다: {doc_dir}")
             return {}
