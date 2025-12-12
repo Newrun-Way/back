@@ -183,7 +183,7 @@ class LLMGenerator:
                     or metadata.get("file_path")
                     or "문서"
             )
-            hierarchy_path = metadata.get("hierarchy_path", "")
+            hierarchy_path = metadata.get("file_path", "")
             chunk_type = metadata.get("type", "paragraph")
 
             # -------------------------
