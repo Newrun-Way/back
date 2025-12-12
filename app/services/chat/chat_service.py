@@ -6,7 +6,7 @@ from app.core.config import get_settings
 from app.services.rag.pipeline import RAGPipeline
 from app.services.chat.chat_memory_chroma import ChatMemory
 from app.services.chat.prompt_builder import build_prompt
-from app.services.llm.llm_service import LLMService
+from app.services.llm.llm_service import LLMService, LLMGenerator
 from app.core.embedder_singleton import GLOBAL_EMBEDDER
 
 class ChatService:
@@ -20,7 +20,7 @@ class ChatService:
             embedder=self.embedder,
             summary_trigger_turns=6,
         )
-        self.llm = LLMService()
+        self.llm = LLMGenerator()
 
     # [Helper] DB에서 유저 권한 정보 가져오기
     def _fetch_user_context(self, user_id: int) -> Dict[str, Any]:
