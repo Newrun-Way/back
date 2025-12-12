@@ -176,8 +176,14 @@ class LLMGenerator:
         for i, ctx in enumerate(contexts):
             content = ctx.get("content", "")
             metadata = ctx.get("metadata", {}) or {}
+            score = ctx.get("score", 0.0)
 
-            doc_name = metadata.get("doc_name", "알 수 없음")
+            doc_name = (
+                    meta.get("filename")
+                    or meta.get("external_doc_id")
+                    or meta.get("file_path")
+                    or "알 수 없는 문서"
+            )
             hierarchy_path = metadata.get("hierarchy_path", "")
             chunk_type = metadata.get("type", "paragraph")
 
