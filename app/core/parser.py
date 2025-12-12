@@ -73,6 +73,72 @@ def extract_hwpx_with_structure(hwpx_path: str):
 
     return result
 
+def parse_document(file_path: str, *, doc_id: str | None = None, meta: dict | None = None):
+    """
+    기존 Celery / 서비스 계층이 호출하는 대표 파서.
+    내부에서는 services/rag/parser.py의 실제 구현을 호출한다.
+    """
+
+    logger.info(f"Starting document parsing for {file_path}")
+    start = time.time()
+
+    file_ext = Path(file_path).suffix.lower()
+
+    if file_ext not in [".hwp", ".hwpx"]:
+        raise ValueError(f"지원하지 않는 형식: {file_ext}")
+
+    if file_ext == ".hwpx":
+        result = extract_hwpx_with_structure(file_path)
+    else:
+        # HWP
+        current_dir = Path(__file__).parent
+        hwp_jar_path = str(current_dir.parent / "python-hwplib" / "hwplib-1.1.8.jar")
+
+        if not os.path.exists(hwp_jar_path):
+            raise FileNotFoundError(f"hwplib JAR 파일 없음: {hwp_jar_path}")
+
+        result = extract_hwp_text(hwp_jar_path, file_path)
+
+    # ---- 기본 메타 병합 ----
+    result["doc_id"] = doc_id or Path(file_path).stem
+    merged_meta = result.get("metadata", {})
+    if meta:
+        merged_meta.update(meta)
+    result["metadata"] = merged_meta
+
+    # ---- 구조 메타 생성 ----
+    full_text = "\n".join(result.get("text_content", []))
+    text_lines = full_text.split("\n")
+
+    doc_structure = analyze_document_structure(text_lines)
+    result["structure"] = doc_structure
+    result["structure_tree"] = build_structure_tree(doc_structure)
+
+    # ---- 구조 메타 paragraph에 merge ----
+    structure_map = doc_structure.get("structure_map", {})
+    for p in result.get("paragraphs", []):
+        idx = p.get("id")
+        meta = structure_map.get(idx, {})
+
+        p["chapter_num"] = meta.get("chapter_num")
+        p["chapter_title"] = meta.get("chapter_title")
+        p["article_num"] = meta.get("article_num")
+        p["article_title"] = meta.get("article_title")
+        p["paragraph_num"] = meta.get("paragraph_num")
+
+        # hierarchy_path 생성
+        parts = []
+        if p["chapter_num"]:
+            parts.append(f"제{p['chapter_num']}장")
+        if p["article_num"]:
+            parts.append(f"제{p['article_num']}조")
+        if p["paragraph_num"]:
+            parts.append(f"{p['paragraph_num']}항")
+
+        p["hierarchy_path"] = " > ".join(parts) if parts else None
+
+    logger.info(f"Finished document parsing: {file_path}")
+    return result
 
 def save_tables_json(hwpx_path: Path, tables: list):
     """
