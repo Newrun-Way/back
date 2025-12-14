@@ -180,21 +180,29 @@ def extract_hwpx_with_structure(hwpx_path):
                     result["text_content"].append(para_text)
 
             # -------------------------------------------------
-            # 🔹 2) 표(table) 추출 – RAG 호환 확장
+            # 🔹 2) 표(table) 추출 – RAG 호환 + JSON 저장
             # -------------------------------------------------
             tables = root.findall('.//hp:tbl', ns)
 
+            # 🔹 표 JSON 저장 경로 준비
+            hwpx_path = Path(hwpx_path)  # extract_hwpx_with_structure 인자
+            doc_dir = hwpx_path.parent  # original.hwpx가 있는 디렉토리
+            tables_dir = doc_dir / "tables"
+            tables_dir.mkdir(parents=True, exist_ok=True)
+
             for t_idx, table in enumerate(tables):
+                table_id = f"t{t_idx + 1:03d}"
+
                 table_data = {
                     "id": t_idx,
-                    "table_id": f"t{t_idx + 1:03d}",  # ⭐ RAG 연동 핵심
+                    "table_id": table_id,  # ⭐ RAG 연동 핵심 키
                     "type": "table",
                     "rows": [],
                     "summary": "",
-                    # ⭐ RAG 구조 기반 검색을 위한 placeholder
+                    # 구조 메타 placeholder (index 단계에서 채워짐)
                     "chapter_num": None,
                     "article_num": None,
-                    "hierarchy_path": None
+                    "hierarchy_path": None,
                 }
 
                 # 행(row) 추출
@@ -207,16 +215,25 @@ def extract_hwpx_with_structure(hwpx_path):
                     if cells:
                         table_data["rows"].append(cells)
 
-                # summary 생성 및 저장
-                if table_data["rows"]:
-                    n_rows = len(table_data["rows"])
-                    n_cols = len(table_data["rows"][0])
-                    table_data["summary"] = f"표 {t_idx + 1}: {n_rows}행 × {n_cols}열"
+                # 유효한 표만 처리
+                if not table_data["rows"]:
+                    continue
 
-                    result["tables"].append(table_data)
+                # summary 생성
+                n_rows = len(table_data["rows"])
+                n_cols = len(table_data["rows"][0]) if table_data["rows"][0] else 0
+                table_data["summary"] = f"표 {t_idx + 1}: {n_rows}행 × {n_cols}열"
 
-                    # 텍스트에도 summary 표시(기존 기능 유지)
-                    result["text_content"].append(f"\n[{table_data['summary']}]\n")
+                # 1️⃣ parser 결과에 포함 (기존 동작 유지)
+                result["tables"].append(table_data)
+
+                # 2️⃣ text_content에도 summary 삽입 (기존 검색용)
+                result["text_content"].append(f"\n[{table_data['summary']}]\n")
+
+                # 3️⃣ ⭐ 표 JSON 파일로 저장 (핵심)
+                table_json_path = tables_dir / f"{table_id}.json"
+                with open(table_json_path, "w", encoding="utf-8") as f:
+                    json.dump(table_data, f, ensure_ascii=False, indent=2)
 
         # -------------------------------------------------
         # 3) 이미지 처리
