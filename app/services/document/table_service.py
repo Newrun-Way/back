@@ -12,3 +12,9 @@ class TableService:
 
     def get_all_tables(self, file_path: str):
         return self.processor.load_tables_from_doc(file_path)
+
+    def get_tables_for_document(self, file_path: str):
+        """
+        file_path = metadata["file_path"] 그대로 받아서 모든 표 로딩
+        """
+        return list(self.processor.load_tables_from_doc(file_path).values())
