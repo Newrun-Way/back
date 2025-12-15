@@ -80,6 +80,15 @@ class ChatSessionService:
         if not session:
             return None
 
+        if session and session.get("refer_docs"):
+            if isinstance(session["refer_docs"], str):
+                try:
+                    session["refer_docs"] = json.loads(session["refer_docs"])
+                except Exception:
+                    session["refer_docs"] = []
+        else:
+            session["refer_docs"] = []
+
         data = self.memory.chat_col.get(where={"conversation_id": str(session_id)})
 
         items = list(zip(data["documents"], data["metadatas"]))
@@ -93,6 +102,7 @@ class ChatSessionService:
             }
             for content, meta in items
         ]
+
 
         return {
             "session": session,
