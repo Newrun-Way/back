@@ -132,6 +132,29 @@ def analyze_document_structure(text_lines):
     return structure
 
 
+def build_hierarchy_path(structure_info):
+    """
+    구조 정보로부터 계층 경로 생성
+    예: "제3장 급여의 지급 > 제15조 급여의 계산 > 제1항"
+    """
+    parts = []
+
+    if structure_info.get('chapter_num'):
+        if structure_info.get('chapter_title'):
+            parts.append(f"제{structure_info['chapter_num']}장 {structure_info['chapter_title']}")
+        else:
+            parts.append(f"제{structure_info['chapter_num']}장")
+
+    if structure_info.get('article_num'):
+        if structure_info.get('article_title'):
+            parts.append(f"제{structure_info['article_num']}조 {structure_info['article_title']}")
+        else:
+            parts.append(f"제{structure_info['article_num']}조")
+
+    if structure_info.get('paragraph_num'):
+        parts.append(f"제{structure_info['paragraph_num']}항")
+
+    return " > ".join(parts) if parts else ""
 
 def extract_hwpx_with_structure(hwpx_path):
     """HWPX 파일에서 텍스트 + 표 + 이미지 + RAG 호환 구조 메타를 추출."""
