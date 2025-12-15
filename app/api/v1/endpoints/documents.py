@@ -262,3 +262,27 @@ def download_document(doc_id: int):
         filename=download_name,
         media_type="application/octet-stream"
     )
+
+@router.get("/{doc_id}/text")
+def get_document_full_text(doc_id: int):
+    """
+    original_전체텍스트.txt 제공 (프론트용)
+    """
+    # 1) DB에서 문서 조회 (예시)
+    doc = doc_service.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(404, "문서를 찾을 수 없습니다.")
+
+    file_path = Path(doc["file_path"])  # global/징계규칙(...).hwpx
+    doc_dir = Path(settings.EXTRACTED_DIR) / file_path.parent
+    text_file = doc_dir / f"{file_path.stem}_전체텍스트.txt"
+
+    if not text_file.exists():
+        raise HTTPException(404, "전체 텍스트 파일이 없습니다.")
+
+    return FileResponse(
+        path=text_file,
+        media_type="text/plain",
+        # filename=text_file.name,
+        headers={"Content-Disposition": "inline"},#미리보기로 제공
+    )
