@@ -199,21 +199,33 @@ class ChatService:
             full_answer += tok
             yield tok
 
-        # ---------------------------------------------------------
         # 8) 종료 후 메타데이터 전달
-        # ---------------------------------------------------------
-        # 답변 후 assistant turn 저장
-        self.mem.add_turn(conversation_id, "assistant", full_answer)
 
         final_payload = {
             "answer": full_answer,
             "sources": sources,
             "context_used": context_str,
         }
-        # ✅ refer_docs 업데이트
+
         self.update_refer_docs(
             chat_session_id=conversation_id,
             final_sources=sources,
+        )
+
+        # ✅ 대표 source 1개 선택 (score 기준)
+        primary_source = None
+        if sources:
+            primary_source = max(
+                sources,
+                key=lambda s: (s.get("score", 0), s.get("paragraph_idx") is not None)
+            )
+
+        # ✅ assistant turn 저장 (대표 source만 metadata로)
+        self.mem.add_turn(
+            conversation_id,
+            role="assistant",
+            content=full_answer,
+            source_meta=primary_source,  # 🔥 신규
         )
 
         yield (

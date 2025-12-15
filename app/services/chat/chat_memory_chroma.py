@@ -38,23 +38,43 @@ class ChatMemory:
     # --------------------------
     # 턴 추가
     # --------------------------
-    def add_turn(self, conversation_id: str, role: str, content: str):
+    def add_turn(
+        self,
+        conversation_id: str,
+        role: str,
+        content: str,
+        source_meta: dict | None = None,
+    ):
         """
-        단순 append. 기존 턴은 절대 삭제하지 않는다.
-        요약은 별도 컬렉션(summary_col)에만 쌓인다.
+        source_meta 예:
+        {
+            "doc_id": 179,
+            "paragraph_idx": 12,
+            "chunk_id": 3
+        }
         """
         emb = self.embedder.embed_texts([content])[0]
 
         uid = f"{conversation_id}:{role}:{datetime.utcnow().timestamp()}"
 
+        metadata = {
+            "conversation_id": conversation_id,
+            "role": role,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+
+        # 🔥 대표 근거 1개만 저장
+        if source_meta:
+            metadata.update({
+                "doc_id": source_meta.get("doc_id"),
+                "paragraph_idx": source_meta.get("paragraph_idx"),
+                "chunk_id": source_meta.get("chunk_id"),
+            })
+
         self.chat_col.add(
             ids=[uid],
             documents=[content],
-            metadatas=[{
-                "conversation_id": conversation_id,
-                "role": role,
-                "created_at": datetime.utcnow().isoformat(),
-            }],
+            metadatas=[metadata],
             embeddings=[emb.tolist()],
         )
 
