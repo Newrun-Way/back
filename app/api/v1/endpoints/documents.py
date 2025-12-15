@@ -273,7 +273,7 @@ def get_document_full_text(doc_id: int):
     if not doc:
         raise HTTPException(404, "문서를 찾을 수 없습니다.")
 
-    file_path = Path(doc["file_path"])  # global/징계규칙(...).hwpx
+    file_path = Path(doc["stored_path"])  # global/징계규칙(...).hwpx
     doc_dir = Path(settings.EXTRACTED_DIR) / file_path.parent
     text_file = doc_dir / f"{file_path.stem}_전체텍스트.txt"
 
