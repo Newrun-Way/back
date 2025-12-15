@@ -5,6 +5,10 @@ from datetime import datetime
 class ChatMessage(BaseModel):
     role: str
     content: str
+    created_at: Optional[str] = None
+    doc_id: Optional[int] = None
+    paragraph_idx: Optional[int] = None
+    chunk_id: Optional[int] = None
 
 class ChatSession(BaseModel):
     id: int
