@@ -213,7 +213,7 @@ class ChatService:
         # ✅ refer_docs 업데이트
         self.update_refer_docs(
             session_id=conversation_id,
-            final_sources=final_sources,
+            final_sources=sources,
         )
 
         yield (
