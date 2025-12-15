@@ -18,12 +18,34 @@ class ChatSessionService:
         db = get_connection()
         try:
             with db.cursor() as cur:
+                # 1. DB 조회
                 cur.execute("""
                     SELECT * FROM chat_sessions 
                     WHERE user_id=%s AND is_deleted=0 
                     ORDER BY updated_at DESC
                 """, (user_id,))
-                return cur.fetchall()
+
+                rows = cur.fetchall()  # 이 시점의 rows 안에는 refer_docs가 "[179]" 문자열임
+
+                # 2. 데이터 변환 (String -> List)
+                for row in rows:
+                    refer_docs = row.get("refer_docs")
+
+                    # 문자열인 경우 JSON 파싱
+                    if isinstance(refer_docs, str):
+                        try:
+                            row["refer_docs"] = json.loads(refer_docs)
+                        except Exception:
+                            # JSON 형식이 깨져있거나 파싱 실패시 빈 리스트 처리
+                            row["refer_docs"] = []
+
+                    # NULL(None)인 경우 빈 리스트로 처리 (Pydantic 호환성)
+                    elif refer_docs is None:
+                        row["refer_docs"] = []
+
+                    # 이미 list인 경우(드라이버가 변환해준 경우)는 그대로 둠
+
+                return rows
         finally:
             db.close()
 
@@ -81,13 +103,19 @@ class ChatSessionService:
         if not session:
             return None
 
-        if session and session.get("refer_docs"):
-            if isinstance(session["refer_docs"], str):
+        refer_docs = session.get("refer_docs")
+
+        if refer_docs:
+            if isinstance(refer_docs, str):
                 try:
-                    session["refer_docs"] = json.loads(session["refer_docs"])
-                except Exception:
+                    # 문자열인 경우 JSON 파싱 시도
+                    session["refer_docs"] = json.loads(refer_docs)
+                except (json.JSONDecodeError, TypeError):
+                    # 파싱 실패 시 빈 리스트
                     session["refer_docs"] = []
+            # else: 이미 list나 dict라면 그대로 둠 (DB 드라이버가 자동 변환한 경우)
         else:
+            # None이나 빈 값인 경우
             session["refer_docs"] = []
 
         data = self.memory.chat_col.get(where={"conversation_id": str(session_id)})
