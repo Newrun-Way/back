@@ -87,9 +87,17 @@ def get_document_detail(doc_pk: int):
 
     def _sort_key(item):
         meta = item[1] or {}
-        if "chunk_id" in meta and meta["chunk_id"] is not None:
-            return meta["chunk_id"]
-        return meta.get("paragraph_idx", 0)
+
+        # 1. chunk_id 가져오기 (없거나 None이면 0으로 기본값 설정)
+        chunk_id = meta.get("chunk_id")
+        if chunk_id is None:
+            chunk_id = 0
+
+        # 2. paragraph_idx 가져오기 (없으면 0으로 기본값 설정)
+        paragraph_idx = meta.get("paragraph_idx", 0)
+
+        # 3. (1순위, 2순위) 형태의 튜플 반환
+        return (chunk_id, paragraph_idx)
 
     items.sort(key=_sort_key)
 
