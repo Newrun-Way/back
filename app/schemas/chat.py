@@ -11,6 +11,7 @@ class ChatSession(BaseModel):
     user_id: int
     title: Optional[str]
     is_deleted: int
+    refer_docs: Optional[List[int]] = None
     created_at: datetime
     updated_at: datetime
 
