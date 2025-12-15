@@ -110,9 +110,9 @@ class ChatService:
                     """
                     UPDATE chat_sessions
                     SET refer_docs=%s, updated_at=NOW()
-                    WHERE session_id=%s
+                    WHERE id=%s
                     """,
-                    (json.dumps(merged, ensure_ascii=False), session_id),
+                    (json.dumps(merged, ensure_ascii=False), chat_session_id),
                 )
                 db.commit()
         finally:
