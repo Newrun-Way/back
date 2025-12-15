@@ -69,7 +69,7 @@ class ChatService:
             cursor.close()
             conn.close()
 
-    def update_refer_docs(session_id: str, final_sources: list[dict]):
+    def update_refer_docs(self, chat_session_id: str, final_sources: list[dict]):
         """
         chat_sessions.refer_docs 업데이트
         - 중복 제거
@@ -89,8 +89,8 @@ class ChatService:
             with db.cursor() as cur:
                 # 2) 기존 refer_docs 조회
                 cur.execute(
-                    "SELECT refer_docs FROM chat_sessions WHERE session_id=%s",
-                    (session_id,)
+                    "SELECT refer_docs FROM chat_sessions WHERE id=%s",
+                    (chat_session_id,)
                 )
                 row = cur.fetchone()
 
@@ -212,7 +212,7 @@ class ChatService:
         }
         # ✅ refer_docs 업데이트
         self.update_refer_docs(
-            session_id=conversation_id,
+            chat_session_id=conversation_id,
             final_sources=sources,
         )
 
