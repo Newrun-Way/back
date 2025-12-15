@@ -210,6 +210,11 @@ class ChatService:
             "sources": sources,
             "context_used": context_str,
         }
+        # ✅ refer_docs 업데이트
+        self.update_refer_docs(
+            session_id=conversation_id,
+            final_sources=final_sources,
+        )
 
         yield (
             f"\n\nevent: metadata\n"
