@@ -91,10 +91,13 @@ def get_document_detail(doc_pk: int):
         # 1. chunk_id 가져오기 (없거나 None이면 0으로 기본값 설정)
         chunk_id = meta.get("chunk_id")
         if chunk_id is None:
-            chunk_id = 0
+            chunk_id = float('inf')
 
-        # 2. paragraph_idx 가져오기 (없으면 0으로 기본값 설정)
-        paragraph_idx = meta.get("paragraph_idx", 0)
+        # 2. paragraph_idx 가져오기
+        paragraph_idx = meta.get("paragraph_idx")
+        # 수정 포인트: paragraph_idx도 None이면 맨 뒤 순서로
+        if paragraph_idx is None:
+            paragraph_idx = float('inf')
 
         # 3. (1순위, 2순위) 형태의 튜플 반환
         return (chunk_id, paragraph_idx)
