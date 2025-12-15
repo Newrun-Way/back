@@ -203,6 +203,7 @@ class LLMGenerator:
                 "doc_name": doc_name,
                 "doc_id": meta.get("db_id", ""),
                 "chunk_id": meta.get("chunk_id", -1),
+                "paragraph_idx":meta.get("paragraph_idx"),
                 "score": score,
                 "type": meta.get("type"),
                 "table_id": table_id,
