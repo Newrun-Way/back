@@ -3,6 +3,7 @@ from app.core.config import get_settings
 from app.services.chat.chat_memory_chroma import ChatMemory
 from app.core.embedder_singleton import GLOBAL_EMBEDDER
 from pathlib import Path
+import json
 
 class ChatSessionService:
     def __init__(self):
