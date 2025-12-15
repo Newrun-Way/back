@@ -122,12 +122,17 @@ class ChatSessionService:
 
         items = list(zip(data["documents"], data["metadatas"]))
         items.sort(key=lambda x: x[1]["created_at"])
-
+        print("=*=메타=*=",meta)
         messages = [
             {
                 "role": meta.get("role"),
                 "content": content,
-                "created_at": meta.get("created_at")
+                "created_at": meta.get("created_at"),
+
+                # 🔥 추가: 근거 메타 (assistant일 때만 의미 있음)
+                "doc_id": meta.get("doc_id"),
+                "paragraph_idx": meta.get("paragraph_idx"),
+                "chunk_id": meta.get("chunk_id"),
             }
             for content, meta in items
         ]
