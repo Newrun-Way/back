@@ -122,7 +122,7 @@ class ChatSessionService:
 
         items = list(zip(data["documents"], data["metadatas"]))
         items.sort(key=lambda x: x[1]["created_at"])
-        print("=*=메타=*=",meta)
+        print("=*=items=*=",items)
         messages = [
             {
                 "role": meta.get("role"),
