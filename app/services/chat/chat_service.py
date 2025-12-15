@@ -69,7 +69,54 @@ class ChatService:
             cursor.close()
             conn.close()
 
+    def update_refer_docs(session_id: str, final_sources: list[dict]):
+        """
+        chat_sessions.refer_docs 업데이트
+        - 중복 제거
+        - 최신 참조 doc_id를 뒤로
+        """
+        # 1) 이번 응답에서 사용한 doc_ids
+        new_doc_ids = [
+            s["doc_id"] for s in final_sources
+            if s.get("doc_id") not in (None, "", -1)
+        ]
 
+        if not new_doc_ids:
+            return
+
+        db = get_connection()
+        try:
+            with db.cursor() as cur:
+                # 2) 기존 refer_docs 조회
+                cur.execute(
+                    "SELECT refer_docs FROM chat_sessions WHERE session_id=%s",
+                    (session_id,)
+                )
+                row = cur.fetchone()
+
+                old_docs = []
+                if row and row.get("refer_docs"):
+                    try:
+                        old_docs = json.loads(row["refer_docs"])
+                    except Exception:
+                        old_docs = []
+
+                # 3) 최신순 유지 (old → 제거 → append)
+                merged = [d for d in old_docs if d not in new_doc_ids]
+                merged.extend(new_doc_ids)
+
+                # 4) 업데이트
+                cur.execute(
+                    """
+                    UPDATE chat_sessions
+                    SET refer_docs=%s, updated_at=NOW()
+                    WHERE session_id=%s
+                    """,
+                    (json.dumps(merged, ensure_ascii=False), session_id),
+                )
+                db.commit()
+        finally:
+            db.close()
 
     #스트리밍 채팅
     async def chat_stream(
