@@ -8,6 +8,7 @@ from .jpype_setup import init_jpype
 import logging
 import time
 import re
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -343,6 +344,55 @@ def extract_hwp_text(hwp_jar_path, hwp_path):
     logger.info(f"Finished HWP extraction for {hwp_path} in {end_time - start_time:.2f} seconds")
     return result
 
+def save_results(result: dict, *, original_file_path: str):
+    """
+    - 전체텍스트.txt (프론트/조회용)
+    - aggregated 표데이터.json (조회용)
+    - 추출요약.txt (관리자용)
+    """
+    settings = get_settings()
+
+    rel = Path(original_file_path)
+    doc_dir = Path(settings.EXTRACTED_DIR) / rel.parent
+    doc_dir.mkdir(parents=True, exist_ok=True)
+
+    doc_name = rel.stem
+
+    saved = {}
+
+    # 1) 전체 텍스트 저장
+    text_content = result.get("text_content") or []
+    if text_content:
+        text_file = doc_dir / f"{doc_name}_전체텍스트.txt"
+        text_file.write_text(
+            "\n\n".join(text_content),
+            encoding="utf-8",
+        )
+        saved["text"] = str(text_file)
+    # 2) aggregated 표데이터.json (조회용)
+    tables = result.get("tables") or []
+    if tables:
+        table_json = doc_dir / f"{doc_name}_표데이터.json"
+        table_json.write_text(
+            json.dumps(tables, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        saved["tables"] = str(table_json)
+
+    # 2) 추출 요약 리포트 (관리자용)
+    report_txt = doc_dir / f"{doc_name}_추출요약.txt"
+    report_txt.write_text(
+        "\n".join([
+            f"file_type: {result.get('file_type')}",
+            f"paragraphs: {len(result.get('paragraphs', []))}",
+            f"tables: {len(tables)}",
+            f"images: {len(result.get('images', []))}",
+        ]),
+        encoding="utf-8",
+    )
+    saved["report"] = str(report_txt)
+
+    return saved
 
 def parse_document(file_path: str, *, doc_id: str | None = None, meta: dict | None = None):
     """HWP/HWPX 파일을 파싱하고 구조화된 JSON 데이터를 반환합니다."""
@@ -384,6 +434,11 @@ def parse_document(file_path: str, *, doc_id: str | None = None, meta: dict | No
     result["structure"] = doc_structure
     result["structure_tree"] = build_structure_tree(doc_structure)
 
+    if meta and meta.get("file_path"):
+        save_results(
+            result,
+            original_file_path=meta["file_path"],
+        )
     # -------------------------
     # 🔥 구조 메타를 paragraph-level에 병합
     # -------------------------
