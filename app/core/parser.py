@@ -14,8 +14,16 @@ logger = logging.getLogger(__name__)
 
 def analyze_document_structure(text_lines):
     """
-    문서 텍스트 줄 리스트에서 장/조/항/호 구조 정보를 분석한다.
-    OWPML1 extract.py 구조와 동일한 원형 설계 기반.
+    문서 텍스트에서 구조 정보 추출 (장/조/항)
+    Args:
+        text_lines: 문서 텍스트 줄 리스트
+
+    Returns:
+        dict: {
+            'chapters': [...],  # 장 정보
+            'articles': [...],  # 조 정보
+            'structure_map': {...}  # 줄 번호 → 구조 정보 매핑
+        }
     """
 
     structure = {
@@ -28,10 +36,10 @@ def analyze_document_structure(text_lines):
     current_article = None
 
     patterns = {
-        "chapter": re.compile(r'^제\s*(\d+)\s*장\s+(.+)$'),
-        "article": re.compile(r'^제\s*(\d+)\s*조\s*(?:\((.+?)\))?(.*)$'),
-        "paragraph": re.compile(r'^([①②③④⑤⑥⑦⑧⑨⑩]|\d+\))\s*(.*)$'),
-        "subparagraph": re.compile(r'^([가나다라마바사아자차카타파하])\.\s+(.*)$')
+        'chapter': re.compile(r'^제\s*(\d+)\s*장\s+(.+)$'),  # 제1장 총칙
+        'article': re.compile(r'^제\s*(\d+)\s*조\s*(?:\((.+?)\))?(.*)$'),  # 제5조 (급여의 계산)
+        'paragraph': re.compile(r'^([①②③④⑤⑥⑦⑧⑨⑩]|\d+\))\s*(.*)$'),  # ① 내용, 1) 내용
+        'subparagraph': re.compile(r'^([가나다라마바사아자차카타파하])\.\s+(.*)$')  # 가. 내용
     }
 
     for line_idx, line in enumerate(text_lines):
@@ -39,35 +47,35 @@ def analyze_document_structure(text_lines):
         if not line:
             continue
 
-        # 장
+        # 장(Chapter) 감지
         chapter_match = patterns["chapter"].match(line)
         if chapter_match:
-            num = chapter_match.group(1)
+            chapter_num = chapter_match.group(1)
             title = chapter_match.group(2).strip()
 
             current_chapter = {
-                "number": num,
-                "title": title,
+                "number": chapter_num,
+                "title": chapter_title,
                 "line_idx": line_idx,
                 "articles": []
             }
             structure["chapters"].append(current_chapter)
             structure["structure_map"][line_idx] = {
                 "type": "chapter",
-                "number": num,
-                "title": title
+                "number": chapter_num,
+                "title": chapter_title
             }
             continue
 
-        # 조
+        # 조(Article) 감지
         article_match = patterns["article"].match(line)
         if article_match:
-            num = article_match.group(1)
-            title = article_match.group(2).strip() if article_match.group(2) else ""
+            article_num = article_match.group(1)
+            article_title = article_match.group(2).strip() if article_match.group(2) else ''
 
             current_article = {
-                "number": num,
-                "title": title,
+                "number": article_num,
+                "title": article_title,
                 "line_idx": line_idx,
                 "chapter_num": current_chapter["number"] if current_chapter else None,
                 "paragraphs": []
@@ -79,48 +87,50 @@ def analyze_document_structure(text_lines):
             structure["articles"].append(current_article)
             structure["structure_map"][line_idx] = {
                 "type": "article",
-                "number": num,
-                "title": title,
+                "number": article_num,
+                "title": article_title,
                 "chapter_num": current_chapter["number"] if current_chapter else None
             }
             continue
 
-        # 항
-        para_match = patterns["paragraph"].match(line)
+        # 항(Paragraph) 감지
+        para_match = patterns['paragraph'].match(line)
         if para_match:
-            num = para_match.group(1)
+            para_num = para_match.group(1)
 
-            korean_map = {"①": "1", "②": "2", "③": "3", "④": "4", "⑤": "5",
-                          "⑥": "6", "⑦": "7", "⑧": "8", "⑨": "9", "⑩": "10"}
-            normalized = korean_map.get(num, num.rstrip(")"))
+            # 한글 숫자 변환
+            korean_numbers = {'①': '1', '②': '2', '③': '3', '④': '4', '⑤': '5',
+                              '⑥': '6', '⑦': '7', '⑧': '8', '⑨': '9', '⑩': '10'}
+            para_num_normalized = korean_numbers.get(para_num, para_num.rstrip(')'))
 
             if current_article:
-                current_article["paragraphs"].append({
-                    "number": normalized,
-                    "line_idx": line_idx
+                current_article['paragraphs'].append({
+                    'number': para_num_normalized,
+                    'line_idx': line_idx
                 })
 
-            structure["structure_map"][line_idx] = {
-                "type": "paragraph",
-                "number": normalized,
-                "article_num": current_article["number"] if current_article else None,
-                "chapter_num": current_chapter["number"] if current_chapter else None
+            structure['structure_map'][line_idx] = {
+                'type': 'paragraph',
+                'number': para_num_normalized,
+                'article_num': current_article['number'] if current_article else None,
+                'chapter_num': current_chapter['number'] if current_chapter else None
             }
             continue
 
-        # 호
+        # 호(Subparagraph) 감지
         subpara_match = patterns["subparagraph"].match(line)
         if subpara_match:
-            letter = subpara_match.group(1)
+            subpara_letter = subpara_match.group(1)
 
-            structure["structure_map"][line_idx] = {
-                "type": "subparagraph",
-                "letter": letter,
-                "article_num": current_article["number"] if current_article else None,
-                "chapter_num": current_chapter["number"] if current_chapter else None
+            structure['structure_map'][line_idx] = {
+                'type': 'subparagraph',
+                'letter': subpara_letter,
+                'article_num': current_article['number'] if current_article else None,
+                'chapter_num': current_chapter['number'] if current_chapter else None
             }
 
     return structure
+
 
 
 def extract_hwpx_with_structure(hwpx_path):
