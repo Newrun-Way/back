@@ -379,7 +379,7 @@ def save_results(result: dict, *, original_file_path: str):
         )
         saved["tables"] = str(table_json)
 
-    # 2) 추출 요약 리포트 (관리자용)
+    # 3) 추출 요약 리포트 (관리자용)
     report_txt = doc_dir / f"{doc_name}_추출요약.txt"
     report_txt.write_text(
         "\n".join([
@@ -391,6 +391,21 @@ def save_results(result: dict, *, original_file_path: str):
         encoding="utf-8",
     )
     saved["report"] = str(report_txt)
+    #4 이미지처리
+    images = result.get("images") or []
+    if images and rel.suffix.lower() == ".hwpx":
+        images_dir = doc_dir / "images"
+        images_dir.mkdir(exist_ok=True)
+
+        hwpx_abs_path = Path(settings.EXTRACTED_DIR) / rel
+        with zipfile.ZipFile(hwpx_abs_path, "r") as z:
+            for img in images:
+                name = img["filename"]
+                for zname in z.namelist():
+                    if zname.startswith("BinData/") and zname.endswith(name):
+                        target = images_dir / name
+                        target.write_bytes(z.read(zname))
+                        break
 
     return saved
 
