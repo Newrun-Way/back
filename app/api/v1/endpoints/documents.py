@@ -13,6 +13,9 @@ import json
 from pydantic import BaseModel
 from typing import List
 
+class DocumentTitlesRequest(BaseModel):
+    doc_ids: List[int]
+
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 settings = get_settings()
