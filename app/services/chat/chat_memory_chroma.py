@@ -43,8 +43,9 @@ class ChatMemory:
         conversation_id: str,
         role: str,
         content: str,
-        source_meta: dict | None = None,
+        source_refs: list[dict] | None = None,
     ):
+
         """
         source_meta 예:
         {
@@ -64,12 +65,9 @@ class ChatMemory:
         }
 
         # 🔥 대표 근거 1개만 저장
-        if source_meta:
-            metadata.update({
-                "doc_id": source_meta.get("doc_id"),
-                "paragraph_idx": source_meta.get("paragraph_idx"),
-                "chunk_id": source_meta.get("chunk_id"),
-            })
+        if source_refs:
+            # 그대로 JSON-serializable
+            metadata["source_refs"] = source_refs
 
         self.chat_col.add(
             ids=[uid],

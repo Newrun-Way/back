@@ -212,20 +212,23 @@ class ChatService:
             final_sources=sources,
         )
 
-        # ✅ 대표 source 1개 선택 (score 기준)
-        primary_source = None
-        if sources:
-            primary_source = max(
-                sources,
-                key=lambda s: (s.get("score", 0), s.get("paragraph_idx") is not None)
-            )
+        # 🔥 sources에서 필요한 필드만 정리
+        source_refs = [
+            {
+                "doc_id": s.get("doc_id"),
+                "paragraph_idx": s.get("paragraph_idx"),
+                "chunk_id": s.get("chunk_id"),
+            }
+            for s in sources
+            if s.get("doc_id") is not None and s.get("paragraph_idx") is not None
+        ]
 
-        # ✅ assistant turn 저장 (대표 source만 metadata로)
+        # ✅ assistant turn 저장 (여러 source_refs)
         self.mem.add_turn(
             conversation_id,
             role="assistant",
             content=full_answer,
-            source_meta=primary_source,  # 🔥 신규
+            source_refs=source_refs,
         )
 
         yield (

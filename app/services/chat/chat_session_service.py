@@ -128,11 +128,7 @@ class ChatSessionService:
                 "role": meta.get("role"),
                 "content": content,
                 "created_at": meta.get("created_at"),
-
-                # 🔥 추가: 근거 메타 (assistant일 때만 의미 있음)
-                "doc_id": meta.get("doc_id"),
-                "paragraph_idx": meta.get("paragraph_idx"),
-                "chunk_id": meta.get("chunk_id"),
+                "source_refs": meta.get("source_refs", []),
             }
             for content, meta in items
         ]

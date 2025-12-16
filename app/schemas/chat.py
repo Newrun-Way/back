@@ -6,9 +6,11 @@ class ChatMessage(BaseModel):
     role: str
     content: str
     created_at: Optional[str] = None
-    doc_id: Optional[int] = None
-    paragraph_idx: Optional[int] = None
-    chunk_id: Optional[int] = None
+    # doc_id: Optional[int] = None
+    # paragraph_idx: Optional[int] = None
+    # chunk_id: Optional[int] = None
+    # 🔥 단일 → 다중
+    source_refs: Optional[List[dict]] = None
 
 class ChatSession(BaseModel):
     id: int
