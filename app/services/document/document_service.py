@@ -85,6 +85,25 @@ class DocumentService:
         finally:
             db.close()
 
+    def get_titles_by_ids(self, doc_ids: list[int]):
+        if not doc_ids:
+            return []
+
+        db = get_connection()
+        try:
+            with db.cursor() as cur:
+                placeholders = ",".join(["%s"] * len(doc_ids))
+                sql = f"""
+                    SELECT id, original_filename
+                    FROM documents
+                    WHERE id IN ({placeholders})
+                      AND deleted_at IS NULL
+                """
+                cur.execute(sql, doc_ids)
+                return cur.fetchall()
+        finally:
+            db.close()
+
     def create(
         self,
         doc_id,

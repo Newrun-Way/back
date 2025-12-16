@@ -10,6 +10,10 @@ from app.services.document.table_service import TableService
 from app.services.document.section_builder import SectionBuilder
 import json
 
+from pydantic import BaseModel
+from typing import List
+
+
 router = APIRouter(prefix="/documents", tags=["Documents"])
 settings = get_settings()
 doc_service = DocumentService()
@@ -321,3 +325,11 @@ def get_document_table_json(doc_id: int):
         # filename=text_file.name,
         headers={"Content-Disposition": "inline"},#미리보기로 제공
     )
+
+@router.post("/titles")
+def get_document_titles(payload: DocumentTitlesRequest):
+    """
+    refer_docs(id 배열)를 받아
+    문서 제목(original_filename)만 반환하는 경량 API
+    """
+    return doc_service.get_titles_by_ids(payload.doc_ids)
