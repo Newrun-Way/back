@@ -66,39 +66,56 @@ def process_document(self, file_path: str, metadata: dict):
         if request_id:
             req_service.update_status(request_id, "DONE")
 
-        # 7) SSE / Redis 알림 (✅ 반드시 channel + message 필요)
-        redis_client.publish(
-            "document_events",
-            json.dumps({
-                "type": "DOCUMENT_PARSED",
+            # 7) SSE publish — 성공 알림
+            redis_client.publish(
+                f"request-events:{request_id}",
+                json.dumps({
+                    "status": "DONE",
+                    "doc_id": doc_id,
+                    "request_id": request_id,
+                })
+            )
+
+            return {
                 "doc_id": doc_id,
                 "request_id": request_id,
-                "status": "PARSED",
-            }, ensure_ascii=False)
-        )
-
-        return {
-            "doc_id": doc_id,
-            "status": "PARSED",
-        }
+                "chunks_indexed": len(parsed.get("paragraphs", [])),
+                "status": "SUCCESS"
+            }
 
     except Exception as e:
-        err = traceback.format_exc()
+        error_message = str(e)
+        error_trace = traceback.format_exc()
 
-        # ❌ 실패 상태 반영
-        doc_service.update_status(doc_id, "FAILED")
-        if request_id:
-            req_service.save_error(request_id, str(e))
+        # 문서 실패
+        try:
+            doc_service.update_status(doc_id, "FAILED")
+        except:
+            pass
 
+        # 요청 실패
+        try:
+            if request_id:
+                req_service.update_status(
+                    request_id,
+                    "FAILED",
+                    error_message=error_trace
+                )
+        except:
+            pass
+
+        # 7) SSE publish — 실패 알림
         redis_client.publish(
-            "document_events",
+            f"request-events:{request_id}",
             json.dumps({
-                "type": "DOCUMENT_FAILED",
-                "doc_id": doc_id,
-                "request_id": request_id,
                 "status": "FAILED",
-                "error": str(e),
-            }, ensure_ascii=False)
+                "request_id": request_id,
+                "error": error_message
+            })
         )
-
-        raise
+        return {
+            "doc_id": doc_id,
+            "request_id": request_id,
+            "status": "FAILED",
+            "error": error_message
+        }
