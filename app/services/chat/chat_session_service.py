@@ -123,12 +123,13 @@ class ChatSessionService:
         items = list(zip(data["documents"], data["metadatas"]))
         items.sort(key=lambda x: x[1]["created_at"])
         print("=*=items=*=",items)
+
         messages = [
             {
                 "role": meta.get("role"),
                 "content": content,
                 "created_at": meta.get("created_at"),
-                "source_refs": meta.get("source_refs", []),
+                "source_refs": self._parse_source_refs(meta),
             }
             for content, meta in items
         ]
@@ -138,3 +139,12 @@ class ChatSessionService:
             "session": session,
             "messages": messages
         }
+
+    def _parse_source_refs(meta):
+        raw = meta.get("source_refs")
+        if isinstance(raw, str):
+            try:
+                return json.loads(raw)
+            except Exception:
+                return []
+        return raw or []
