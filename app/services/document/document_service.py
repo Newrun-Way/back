@@ -86,7 +86,7 @@ class DocumentService:
         finally:
             db.close()
 
-    def get_titles_by_ids(self, doc_ids: list[int]):
+    def get_titles_by_ids(self, doc_ids: List[int]):
         if not doc_ids:
             return []
 
