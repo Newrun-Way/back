@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     USE_RERANKER: bool = True  # GPU 서버이면 항상 True
     RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
     RERANKER_DEVICE: str = "cuda"  # GPU에서 CrossEncoder 실행
-    RERANK_THRESHOLD: float = 0.0  # 점수 필터링 기준 (보통 0)
+    RERANK_THRESHOLD: float = 0.15  # 점수 필터링 기준 (보통 0)
     RERANK_TOP_K: int = 15  # 벡터검색 후보 상위 n개만 rerank
     FINAL_TOP_K: int = 5
 
