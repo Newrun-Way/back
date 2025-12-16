@@ -1,6 +1,7 @@
 # app/services/document/document_service.py
 from app.core.db import get_connection
 from datetime import datetime
+from typing import List
 
 class DocumentService:
     def __init__(self):
