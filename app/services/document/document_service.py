@@ -2,6 +2,7 @@
 from app.core.db import get_connection
 from datetime import datetime
 from typing import List
+from pydantic import BaseModel
 
 class DocumentTitlesRequest(BaseModel):
     doc_ids: List[int]
