@@ -20,26 +20,22 @@ req_service = RequestService()
 def process_document(self, file_path: str, metadata: dict):
     """
     파싱 → 청킹 → 임베딩 Celery Task
-    - requests.approve_request()에서 넘긴 metadata를
-      parsing.upload_and_parse()와 동일한 스키마로 해석해서 사용
     """
-    # 레거시/기존 코드 호환용: doc_id == external_doc_id
     doc_id = metadata.get("doc_id")
     if not doc_id:
         raise ValueError("metadata['doc_id'](external_doc_id)가 필요합니다.")
     request_id = metadata.get("request_id")
 
     try:
-        # 1) 파일 체크
+        # 1) 파일 존재 확인
         path = Path(file_path)
         if not path.exists():
             raise FileNotFoundError(f"파일을 찾을 수 없습니다: {file_path}")
 
-        # 2) 메타 구성 (관리자 업로드 레거시와 동일 스키마)
-        #    - parsing.upload_and_parse() 의 meta와 최대한 동일하게 맞춘다.
+        # 2) meta 구성
         meta = {
             "db_id": metadata.get("db_id"),
-            "external_doc_id": metadata.get("external_doc_id") or metadata.get("doc_id"),
+            "external_doc_id": metadata.get("external_doc_id") or doc_id,
             "user_id": metadata.get("user_id"),
             "dept_id": metadata.get("dept_id"),
             "project_id": metadata.get("project_id"),
@@ -48,80 +44,61 @@ def process_document(self, file_path: str, metadata: dict):
             "upload_date": metadata.get("upload_date"),
             "filename": metadata.get("filename"),
             "file_ext": metadata.get("file_ext"),
-            # parsing.upload_and_parse 에서의 file_path와 같은 의미:
-            # UPLOAD_DIR 기준 상대 경로
             "file_path": metadata.get("file_path"),
         }
         # 3) 파싱
         parsed = parse_document(
             str(path),
-            doc_id=meta["external_doc_id"],  # = external_doc_id
+            doc_id=meta["external_doc_id"],
             meta=meta,
         )
 
-        # 4) 청킹/임베딩
+        # 4) 임베딩 / 인덱싱
         from app.services.rag.rag_service import RAGService
 
         rag = RAGService()
         rag.index_parsed_paragraphs_sharded(parsed, persist=True)
 
-        # 5) 문서 상태 = PARSED (external_doc_id 기준)
+        # 5) 문서 상태 업데이트
         doc_service.update_status(doc_id, "PARSED")
 
-        # 6) 요청 상태 = DONE
+        # 6) 요청 상태 업데이트
         if request_id:
             req_service.update_status(request_id, "DONE")
 
-        # 7) SSE publish — 성공 알림
+        # 7) SSE / Redis 알림 (✅ 반드시 channel + message 필요)
         redis_client.publish(
-            f"request-events:{request_id}",
+            "document_events",
             json.dumps({
-                "status": "DONE",
+                "type": "DOCUMENT_PARSED",
                 "doc_id": doc_id,
                 "request_id": request_id,
-            })
+                "status": "PARSED",
+            }, ensure_ascii=False)
         )
 
         return {
             "doc_id": doc_id,
-            "request_id": request_id,
-            "chunks_indexed": len(parsed.get("paragraphs", [])),
-            "status": "SUCCESS"
+            "status": "PARSED",
         }
 
     except Exception as e:
-        error_message = str(e)
-        error_trace = traceback.format_exc()
+        err = traceback.format_exc()
 
-        # 문서 실패
-        try:
-            doc_service.update_status(doc_id, "FAILED")
-        except:
-            pass
+        # ❌ 실패 상태 반영
+        doc_service.update_status(doc_id, "FAILED")
+        if request_id:
+            req_service.save_error(request_id, str(e))
 
-        # 요청 실패
-        try:
-            if request_id:
-                req_service.update_status(
-                    request_id,
-                    "FAILED",
-                    error_message=error_trace
-                )
-        except:
-            pass
-
-        # 7) SSE publish — 실패 알림
         redis_client.publish(
-            f"request-events:{request_id}",
+            "document_events",
             json.dumps({
-                "status": "FAILED",
+                "type": "DOCUMENT_FAILED",
+                "doc_id": doc_id,
                 "request_id": request_id,
-                "error": error_message
-            })
+                "status": "FAILED",
+                "error": str(e),
+            }, ensure_ascii=False)
         )
-        return {
-            "doc_id": doc_id,
-            "request_id": request_id,
-            "status": "FAILED",
-            "error": error_message
-        }
+
+        raise

@@ -110,7 +110,10 @@ class StructureAwareChunker:
         if meta.get("article_num"):
             title = meta.get("article_title", "")
             parts.append(f"제{meta['article_num']}조 {title}".strip())
-        meta["hierarchy_path"] = " > ".join(parts)
+        meta["hierarchy_path"] = (
+            meta.get("hierarchy_path")
+            or " > ".join(parts)
+        )
 
         return meta
 

@@ -32,7 +32,10 @@ def analyze_document_structure(text_lines):
         "articles": [],
         "structure_map": {}
     }
-
+    chapter_num = None
+    chapter_title = ""
+    article_num = None
+    article_title = ""
     current_chapter = None
     current_article = None
 
@@ -52,7 +55,7 @@ def analyze_document_structure(text_lines):
         chapter_match = patterns["chapter"].match(line)
         if chapter_match:
             chapter_num = chapter_match.group(1)
-            title = chapter_match.group(2).strip()
+            chapter_title = chapter_match.group(2).strip()  # ✅ 핵심
 
             current_chapter = {
                 "number": chapter_num,
@@ -60,6 +63,7 @@ def analyze_document_structure(text_lines):
                 "line_idx": line_idx,
                 "articles": []
             }
+
             structure["chapters"].append(current_chapter)
             structure["structure_map"][line_idx] = {
                 "type": "chapter",
