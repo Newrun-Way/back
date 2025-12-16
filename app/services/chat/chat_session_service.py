@@ -140,7 +140,7 @@ class ChatSessionService:
             "messages": messages
         }
 
-    def _parse_source_refs(meta):
+    def _parse_source_refs(self, meta):
         raw = meta.get("source_refs")
         if isinstance(raw, str):
             try:
