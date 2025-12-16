@@ -294,50 +294,56 @@ class RAGService:
         user=None,
     ):
         """
-        user: {
-          "id": 1,
-          "dept_id": 3,
-          "role": "USER",
-          "projects": [1, 5, 7],
-          "collab_projects": [3, 9]
-        }
+        return: [
+          {
+            "content": "...",
+            "score": float,
+            "metadata": {...}
+          },
+          ...
+        ]
         """
         k = top_k or getattr(self.settings, "TOP_K", 5)
         threshold = getattr(self.settings, "SIMILARITY_THRESHOLD", 0.7)
 
+        # ---------------------------------------------------------
+        # 0) ACL where_filter 구성 (사전 필터링)
+        # ---------------------------------------------------------
+        where_filter = self._build_acl_where_filter(user)
+
+        # 완전 차단 케이스: 검색 자체를 하지 않음
+        if where_filter == {"_deny": True}:
+            return []
+
+        # ---------------------------------------------------------
+        # 1) 쿼리 임베딩 + 벡터 검색 (ACL where 적용)
+        # ---------------------------------------------------------
         q_vec = self.embedder.embed_query(question).astype(np.float32)
-        # 1차: 벡터 검색 (약간 여유 있게 가져오기)
+
+        # 1차 후보는 여유 있게
         base_top_k = k * 3
+
         results: List[Tuple[object, float]] = self.vector_store.search(
             q_vec,
             top_k=base_top_k,
             threshold=threshold,
+            where_filter=where_filter,  # ✅ 핵심: 사전 ACL 필터
         )
 
-        # ACL 필터링 (Document, score) 튜플 유지
-        acl_filtered: List[Tuple[object, float]] = []
-        for doc, dist in results:
-            meta = getattr(doc, "metadata", {}) or {}
-            if self._has_access(user, meta):
-                # acl_filtered.append((doc, dist))
-                # 임시 테스트
-                acl_filtered = results
+        # 검색 결과가 없으면 바로 반환
+        if not results:
+            return []
 
-        if not acl_filtered:
-            print("NOT acl_filtered")
-            acl_filtered = results
-            # return []
-
-        # 🔹 Reranker 적용 여부
+        # ---------------------------------------------------------
+        # 2) Reranker 적용 여부
+        # ---------------------------------------------------------
         if self.use_reranker and self.reranker is not None:
-            rerank_threshold = float(
-                getattr(self.settings, "RERANK_THRESHOLD", 0.0)
-            )
+            rerank_threshold = float(getattr(self.settings, "RERANK_THRESHOLD", 0.0))
             rerank_top_k = int(getattr(self.settings, "RERANK_TOP_K", k * 2))
             final_top_k = int(getattr(self.settings, "FINAL_TOP_K", k))
 
-            # 너무 많이는 안 넘기도록 잘라줌
-            candidates = acl_filtered[:rerank_top_k]
+            # 너무 많이는 안 넘기도록 자름
+            candidates = results[:rerank_top_k]
 
             reranked = self.reranker.rerank_with_threshold(
                 question,
@@ -349,16 +355,18 @@ class RAGService:
             selected = reranked[:k] if reranked else []
         else:
             # Reranker 비활성화 시, 원래 순서대로 상위 k개
-            selected = acl_filtered[:k]
+            selected = results[:k]
 
-        # 응답 포맷 유지
+        # ---------------------------------------------------------
+        # 3) 응답 포맷 유지 (authorized)
+        # ---------------------------------------------------------
         authorized: List[Dict] = []
         for doc, score in selected:
             meta = getattr(doc, "metadata", {}) or {}
             authorized.append(
                 {
                     "content": doc.page_content,
-                    # 리랭커가 있으면 score=rerank score, 아니면 L2 거리
+                    # 리랭커가 있으면 score=rerank score, 아니면 (VectorStore.search 구현에 따른) 거리/점수
                     "score": float(score),
                     "metadata": meta,
                 }
@@ -369,30 +377,34 @@ class RAGService:
     # ---------------------------------------------------------------------
     # ACL
     # ---------------------------------------------------------------------
-    def _has_access(self, user, meta):
-        # user 정보가 없으면 일단 막는다 (필요 시 정책 변경)
+    def _build_acl_where_filter(self, user: Optional[Dict]) -> Optional[Dict]:
+        """
+        ACL 사전필터링 규칙:
+        - SUPER_ADMIN: 전체 접근
+        - MANAGER / USER: dept_id 일치 문서만
+        """
         if not user:
-            return False
+            return None
 
-        # SUPER_ADMIN → 모든 문서 접근 가능
-        if user.get("role") == "SUPER_ADMIN":
-            return True
+        role = user.get("role")
+        dept_id = user.get("dept_id")
 
-        # 일반 dept 접근
-        if meta.get("dept_id") == user.get("dept_id"):
-            return True
+        # SUPER_ADMIN은 전체 접근
+        if role == "SUPER_ADMIN":
+            return None
 
-        # 사용자가 속한 프로젝트
-        if "project_id" in meta and meta["project_id"] in user.get("projects", []):
-            return True
+        # MANAGER / USER
+        if role in ("MANAGER", "USER"):
+            if not dept_id:
+                # dept_id 없으면 아무것도 못 봄
+                return {"_deny": True}
 
-        # 협업 프로젝트
-        if "project_id" in meta and meta["project_id"] in user.get(
-            "collab_projects", []
-        ):
-            return True
+            return {
+                "dept_id": dept_id
+            }
 
-        return False
+        # 그 외 role은 보수적으로 차단
+        return {"_deny": True}
 
     def _clean_metadata(self, meta: dict) -> dict:
         cleaned = {}

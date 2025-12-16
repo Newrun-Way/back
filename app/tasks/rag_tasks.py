@@ -13,6 +13,8 @@ from app.core.config import get_settings
 settings = get_settings()
 redis_client = redis.Redis.from_url(settings.REDIS_URL)
 
+doc_service = DocumentService()
+req_service = RequestService()
 
 @shared_task(bind=True)
 def process_document(self, file_path: str, metadata: dict):
@@ -23,10 +25,9 @@ def process_document(self, file_path: str, metadata: dict):
     """
     # 레거시/기존 코드 호환용: doc_id == external_doc_id
     doc_id = metadata.get("doc_id")
+    if not doc_id:
+        raise ValueError("metadata['doc_id'](external_doc_id)가 필요합니다.")
     request_id = metadata.get("request_id")
-
-    doc_service = DocumentService()
-    req_service = RequestService()
 
     try:
         # 1) 파일 체크

@@ -158,7 +158,7 @@ class ChatService:
         # ---------------------------------------------------------
         rag_contexts = self.rag.retrieve(
             question=message,
-            user={"id": user_id}
+            user=user_context  # ✅ role, dept_id 포함 전체 전달
         )
         print("# 4) RAG 검색")
         print("retrieve",rag_contexts)

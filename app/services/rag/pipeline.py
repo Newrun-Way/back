@@ -46,10 +46,17 @@ class RAGPipeline:
         )
 
     # 2 검색만 수행 (ChatService용)
-    def retrieve(self, question: str, user: Optional[Dict[str, Any]] = None, top_k: int = 3):
+    def retrieve(self, question: str, user: Optional[Dict] = None, top_k: int = 3):
         """
-        LLM 생성 없이, 벡터 DB에서 문서만 검색하여 반환합니다.
-        ChatService에서 프롬프트를 직접 구성할 때 사용합니다.
+        user: {
+          id: int,
+          role: str,
+          dept_id: int | None,
+          project_id: int | None
+        }
         """
-        # user 정보를 RAGService.query로 그대로 전달합니다.
-        return self.retriever.query(question, user=user, top_k=top_k)
+        return self.retriever.query(
+            question=question,
+            user=user,
+            top_k=top_k
+        )
