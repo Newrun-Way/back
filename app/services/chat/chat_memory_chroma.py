@@ -3,7 +3,7 @@ from datetime import datetime
 import chromadb
 from chromadb.config import Settings
 from pathlib import Path
-
+import json
 from loguru import logger
 
 
@@ -67,7 +67,10 @@ class ChatMemory:
         # 🔥 대표 근거 1개만 저장
         if source_refs:
             # 그대로 JSON-serializable
-            metadata["source_refs"] = source_refs
+            metadata["source_refs"] = json.dumps(
+                source_refs,
+                ensure_ascii=False
+            )
 
         self.chat_col.add(
             ids=[uid],
