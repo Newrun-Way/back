@@ -136,19 +136,19 @@ async def upload_and_parse(
     logger.info(f"[CHROMA INDEX] 인덱싱된 청크 수: {indexed}")
 
     # --- 선택적 디버그: 인덱스 검사 ---
-    try:
-        test_debug = rag.search_with_shard(
-            query="__debug__check__",  # 아무거나
-            user_id=user_id,
-            project_id=project_id,
-            dept_id=dept_id,
-            top_k=2
-        )
-        logger.info("[CHROMA DEBUG SEARCH] 검색 결과 샘플:")
-        for item in test_debug:
-            logger.info(f"  - {item}")
-    except Exception as e:
-        logger.warning(f"[CHROMA DEBUG] 검색 체크 중 예외 발생: {e}")
+    # try:
+    #     test_debug = rag.search_with_shard(
+    #         query="__debug__check__",  # 아무거나
+    #         user_id=user_id,
+    #         project_id=project_id,
+    #         dept_id=dept_id,
+    #         top_k=2
+    #     )
+    #     logger.info("[CHROMA DEBUG SEARCH] 검색 결과 샘플:")
+    #     for item in test_debug:
+    #         logger.info(f"  - {item}")
+    # except Exception as e:
+    #     logger.warning(f"[CHROMA DEBUG] 검색 체크 중 예외 발생: {e}")
 
     # 8) DB 상태 업데이트
     conn = get_connection()
