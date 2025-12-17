@@ -38,13 +38,9 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 # ===========================================================
 # Worker (CPU)
 # ===========================================================
-FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04 AS worker
-
-ENV EMBEDDING_DEVICE=cuda
-ENV USE_RERANKER=false
-ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-
-CMD ["celery", "-A", "app.core.celery_app.celery_app", "worker", "-l", "info", "--concurrency=1"]
+FROM base AS worker
+ENV EMBEDDING_DEVICE=cpu
+CMD ["celery", "-A", "app.core.celery_app.celery_app", "worker", "-l", "info"]
 
 
 # ===========================================================
