@@ -1,109 +1,150 @@
 from app.core.db import get_connection
 from datetime import datetime
+import bcrypt
 
 class UserService:
-    def __init__(self):
-        self.db = get_connection()
 
     # -----------------------------
-    # 사번(employee_id) 생성 함수
+    # 사번(employee_id) 생성
     # -----------------------------
     def generate_employee_id(self, user_pk: int, dept_id: int) -> str:
         year = datetime.now().year
-        dept_str = f"{dept_id:02d}"   # 2자리 dept
+        dept_str = f"{dept_id:02d}"
         return f"{year}{dept_str}{user_pk}"
 
     # -----------------------------
-    # 사용자 생성 (관리자용)
+    # 사용자 생성
     # -----------------------------
     def create_user(self, account_id, password_hash, user_name, dept_id, role):
-        with self.db.cursor() as cur:
-            sql = """
-            INSERT INTO users (account_id, password, user_name, dept_id, role, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
-            """
-            cur.execute(sql, (account_id, password_hash, user_name, dept_id, role))
-            self.db.commit()
+        db = get_connection()
+        try:
+            with db.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO users
+                    (account_id, password, user_name, dept_id, role, is_active, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, 1, NOW(), NOW())
+                """, (account_id, password_hash, user_name, dept_id, role))
+                user_pk = cur.lastrowid
+                db.commit()
 
-            user_pk = cur.lastrowid
+            employee_id = self.generate_employee_id(user_pk, dept_id)
 
-        # 사번(employee_id) 생성 후 저장
-        employee_id = self.generate_employee_id(user_pk, dept_id)
+            with db.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET employee_id=%s WHERE id=%s",
+                    (employee_id, user_pk)
+                )
+                db.commit()
 
-        with self.db.cursor() as cur:
-            cur.execute(
-                "UPDATE users SET employee_id=%s WHERE id=%s",
-                (employee_id, user_pk)
-            )
-            self.db.commit()
-
-        return self.get_by_id(user_pk)
+            return self.get_by_id(user_pk)
+        finally:
+            db.close()
 
     # -----------------------------
-    # 단일 조회
+    # 단일 조회 (활성 유저만)
     # -----------------------------
     def get_by_id(self, user_id: int):
-        with self.db.cursor() as cur:
-            cur.execute("SELECT * FROM users WHERE id=%s", (user_id,))
-            return cur.fetchone()
+        db = get_connection()
+        try:
+            with db.cursor() as cur:
+                cur.execute("""
+                    SELECT *
+                    FROM users
+                    WHERE id=%s AND is_active=1
+                """, (user_id,))
+                return cur.fetchone()
+        finally:
+            db.close()
 
     def get_by_account(self, account_id: str):
-        with self.db.cursor() as cur:
-            cur.execute("SELECT * FROM users WHERE account_id=%s", (account_id,))
-            return cur.fetchone()
+        db = get_connection()
+        try:
+            with db.cursor() as cur:
+                cur.execute("""
+                    SELECT *
+                    FROM users
+                    WHERE account_id=%s AND is_active=1
+                """, (account_id,))
+                return cur.fetchone()
+        finally:
+            db.close()
 
     # -----------------------------
-    # 전체 조회
+    # 전체 조회 (삭제 유저 제외 ✅)
     # -----------------------------
     def list_all(self):
-        with self.db.cursor() as cur:
-            cur.execute("SELECT * FROM users ORDER BY id DESC")
-            return cur.fetchall()
+        db = get_connection()
+        try:
+            with db.cursor() as cur:
+                cur.execute("""
+                    SELECT *
+                    FROM users
+                    WHERE is_active = 1
+                    ORDER BY id DESC
+                """)
+                return cur.fetchall()
+        finally:
+            db.close()
 
     # -----------------------------
-    # 수정 (name, role, dept 등)
+    # 수정
     # -----------------------------
     def update_user(self, user_id: int, fields: dict):
-        set_clause = ", ".join([f"{k}=%s" for k in fields.keys()])
-        params = list(fields.values()) + [user_id]
+        db = get_connection()
+        try:
+            set_clause = ", ".join([f"{k}=%s" for k in fields.keys()])
+            params = list(fields.values()) + [user_id]
 
-        with self.db.cursor() as cur:
-            cur.execute(f"UPDATE users SET {set_clause}, updated_at=NOW() WHERE id=%s", params)
-            self.db.commit()
+            with db.cursor() as cur:
+                cur.execute(
+                    f"UPDATE users SET {set_clause}, updated_at=NOW() WHERE id=%s",
+                    params
+                )
+                db.commit()
 
-        return self.get_by_id(user_id)
+            return self.get_by_id(user_id)
+        finally:
+            db.close()
 
     # -----------------------------
-    # 삭제 (is_active = 0 처리)
+    # 삭제 (Soft Delete)
     # -----------------------------
     def deactivate_user(self, user_id: int):
-        with self.db.cursor() as cur:
-            cur.execute(
-                "UPDATE users SET is_active=0, updated_at=NOW() WHERE id=%s",
-                (user_id,)
-            )
-            self.db.commit()
-        return {"message": "User deactivated", "user_id": user_id}
+        db = get_connection()
+        try:
+            with db.cursor() as cur:
+                cur.execute("""
+                    UPDATE users
+                    SET is_active=0, updated_at=NOW()
+                    WHERE id=%s
+                """, (user_id,))
+                db.commit()
+            return {"message": "User deactivated", "user_id": user_id}
+        finally:
+            db.close()
 
-    import bcrypt
-
+    # -----------------------------
+    # 비밀번호 변경
+    # -----------------------------
     def update_password(self, user_id: int, old_pw: str, new_pw: str):
         user = self.get_by_id(user_id)
         if not user:
             return None
 
-        # 기존 PW 검증
-        if not bcrypt.checkpw(old_pw.encode("utf-8"), user["password"].encode("utf-8")):
+        if not bcrypt.checkpw(old_pw.encode(), user["password"].encode()):
             return False
 
-        # 새 PW 저장
-        hashed = bcrypt.hashpw(new_pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        hashed = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt()).decode()
 
-        with self.db.cursor() as cur:
-            cur.execute(
-                "UPDATE users SET password=%s, updated_at=NOW() WHERE id=%s",
-                (hashed, user_id)
-            )
-            self.db.commit()
-
-        return True
+        db = get_connection()
+        try:
+            with db.cursor() as cur:
+                cur.execute("""
+                    UPDATE users
+                    SET password=%s, updated_at=NOW()
+                    WHERE id=%s
+                """, (hashed, user_id))
+                db.commit()
+            return True
+        finally:
+            db.close()
