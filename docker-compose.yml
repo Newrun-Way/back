@@ -39,24 +39,37 @@ services:
     restart: unless-stopped
 
   # ======================================================
-  # Celery Worker (CPU)
+  # Celery Worker (GPU)
   # ======================================================
   worker:
     build:
       context: .
-      target: worker       # ← Multi-stage Dockerfile의 worker 스테이지 선택
+      target: worker
     container_name: back_worker
     env_file:
       - .env
     environment:
-      EMBEDDING_DEVICE: cpu    # Worker는 GPU 불필요
-    command: celery -A app.core.celery_app.celery_app worker --loglevel=info
+      EMBEDDING_DEVICE: cuda
+      USE_RERANKER: "false"
+      NVIDIA_VISIBLE_DEVICES: "0"
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+    command: >
+      celery -A app.core.celery_app.celery_app worker
+      --loglevel=info
+      --concurrency=1
     volumes:
       - ./app:/app/app
       - ./data:/app/app/data
     depends_on:
       - redis
     restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
 
   # ======================================================
   # Flower Dashboard (CPU)
